@@ -1,165 +1,172 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>OpenFeed — Minimal Decentralized Social Feed (MVP)</title>
-  <style>
-    body{max-width:900px;margin:20px auto;padding:16px;font-family:system-ui,sans-serif;line-height:1.4}
-    h1,h3{margin-bottom:8px}
-    input,textarea,button{font:inherit;padding:6px}
-    .card{border:1px solid #ccc;padding:12px;border-radius:8px;margin:12px 0}
-    .feed-list{display:flex;flex-wrap:wrap;gap:8px}
-    .feed-item{background:#f1f1f1;padding:6px 8px;border-radius:6px;border:1px solid #ddd;display:flex;align-items:center}
-    .posts{margin-top:12px}
-    .post{padding:10px;border-bottom:1px dashed #ccc}
-    .meta{font-size:12px;color:#555}
-    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
-    .flex{display:flex;gap:8px}
-    .right{margin-left:auto}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>OpenFeed — Secure MVP</title>
+<style>
+body{max-width:900px;margin:20px auto;padding:16px;font-family:system-ui,sans-serif;line-height:1.4}
+h1,h3{margin-bottom:8px}
+input,textarea,button{font:inherit;padding:6px}
+.card{border:1px solid #ccc;padding:12px;border-radius:8px;margin:12px 0}
+.feed-list{display:flex;flex-wrap:wrap;gap:8px}
+.feed-item{background:#f1f1f1;padding:6px 8px;border-radius:6px;border:1px solid #ddd;display:flex;align-items:center}
+.posts{margin-top:12px}
+.post{padding:10px;border-bottom:1px dashed #ccc}
+.meta{font-size:12px;color:#555}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.flex{display:flex;gap:8px}
+.right{margin-left:auto}
+</style>
 </head>
 <body>
-  <header>
-    <h1>OpenFeed — MVP</h1>
-    <p>Decentralized feed client. Each feed is a simple JSON file you can host publicly.</p>
-  </header>
+<header>
+<h1>OpenFeed — Secure MVP</h1>
+<p>Decentralized feed client with login and automatic updates.</p>
+</header>
 
-  <section class="card">
-    <h3>1) Add Feed URL</h3>
-    <div class="controls">
-      <input id="feedUrl" placeholder="Feed URL (e.g. https://OPXN-FXXD.github.io/feed.json)" style="flex:1" />
-      <button id="addFeed">Add</button>
-      <button id="clearFeeds">Clear All</button>
-    </div>
-    <div class="feed-list" id="feedsContainer"></div>
-  </section>
+<section class="card">
+<h3>Feed Timeline</h3>
+<div class="controls">
+<button id="refresh">Refresh Now</button>
+<div class="right">Posts: <span id="postCount">0</span></div>
+</div>
+<div class="posts" id="posts"></div>
+</section>
 
-  <section class="card">
-    <h3>2) Timeline</h3>
-    <div class="controls">
-      <button id="refresh">Refresh</button>
-      <button id="downloadMerged">Download Merged feed.json</button>
-      <div class="right">Posts: <span id="postCount">0</span></div>
-    </div>
-    <div class="posts" id="posts"></div>
-  </section>
+<section class="card">
+<h3>Login to Post</h3>
+<input id="username" placeholder="Username" />
+<input id="password" type="password" placeholder="Password" />
+<button id="loginBtn">Login</button>
+<p id="loginStatus" style="color:red;"></p>
+</section>
 
-  <section class="card">
-    <h3>3) Local Post</h3>
-    <input id="localName" placeholder="Your Name (e.g. OPXN-FXXD)" />
-    <textarea id="localText" rows="3" placeholder="Write your post..."></textarea>
-    <div class="controls">
-      <button id="localPost">Post Locally</button>
-      <button id="exportFeed">Download feed.json</button>
-    </div>
-    <p>Tip: Upload feed.json to GitHub Pages or Netlify so others can follow.</p>
-  </section>
+<section class="card">
+<h3>New Post</h3>
+<textarea id="postText" rows="3" placeholder="Write your post..." disabled></textarea>
+<div class="controls">
+<button id="postBtn" disabled>Post</button>
+<button id="exportBtn">Download feed.json</button>
+</div>
+</section>
 
-  <section class="card">
-    <h3>Example feed.json</h3>
-    <pre>{
-  "name": "OPXN-FXXD",
+<section class="card">
+<h3>Example feed.json</h3>
+<pre>{
+  "username": "OPXN-FXXD",
+  "password": "cGFzc3dvcmQ=", 
   "about": "OpenFeed Enthusiast",
   "posts": [
     {
       "id": "2025-10-29T12:00:00Z-1",
       "time": "2025-10-29T12:00:00Z",
-      "text": "Hello world! My first OpenFeed post 🎉",
-      "meta": {"tags": ["intro"]}
+      "text": "Hello world! My first OpenFeed post 🎉"
     }
   ]
 }</pre>
-  </section>
+</section>
 
-  <footer>
-    <p>To host: Create a GitHub repository named <code>OPXN-FXXD.github.io</code>, upload feed.json and index.html, then enable GitHub Pages. Your site URL will be <code>https://OPXN-FXXD.github.io</code>.</p>
-  </footer>
+<footer>
+<p>To host: Create a GitHub repository named OPXN-FXXD.github.io, upload feed.json and index.html, enable GitHub Pages. Site URL: https://OPXN-FXXD.github.io</p>
+</footer>
 
-  <script>
-    const feedsKey = 'openfeed_feeds_v1';
-    let feeds = JSON.parse(localStorage.getItem(feedsKey) || '[]');
-    let posts = [];
+<script>
+// --- Config ---
+const FEED_URL = "https://OPXN-FXXD.github.io/feed.json"; // your feed.json URL
+let feedData = null;
+let loggedIn = false;
 
-    const $ = id => document.getElementById(id);
-    const feedsContainer = $('feedsContainer');
-    const postsContainer = $('posts');
+// --- DOM Elements ---
+const postsContainer = document.getElementById('posts');
+const postCount = document.getElementById('postCount');
+const loginStatus = document.getElementById('loginStatus');
+const usernameInput = document.getElementById('username');
+const passwordInput = document.getElementById('password');
+const postText = document.getElementById('postText');
+const postBtn = document.getElementById('postBtn');
 
-    function renderFeeds(){
-      feedsContainer.innerHTML='';
-      feeds.forEach((f,i)=>{
-        const el=document.createElement('div');
-        el.className='feed-item';
-        el.innerText=f;
-        const btn=document.createElement('button');
-        btn.textContent='x';
-        btn.style.marginLeft='6px';
-        btn.onclick=()=>{feeds.splice(i,1); saveFeeds(); renderFeeds(); refresh();}
-        el.appendChild(btn);
-        feedsContainer.appendChild(el);
-      });
-    }
+// --- Utils ---
+function escapeHtml(s){if(!s) return''; return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function hashPass(pw){return btoa(pw);} // simple Base64 hash
+function normalizePost(item){const id=item.id||(item.time?`${item.time}-${Math.random().toString(36).substr(2,5)}`:'p-'+Math.random().toString(36).substr(2,9));const time=item.time||new Date().toISOString(); return {...item,id,time};}
 
-    function saveFeeds(){ localStorage.setItem(feedsKey, JSON.stringify(feeds)); }
+// --- Fetch Feed ---
+async function loadFeed(){
+  try{
+    const res = await fetch(FEED_URL,{cache:'no-store'});
+    if(!res.ok) throw new Error(res.status);
+    feedData = await res.json();
+    renderPosts();
+  }catch(e){
+    console.warn('Error loading feed', e);
+    feedData = {username:'',password:'',about:'',posts:[]};
+  }
+}
 
-    async function fetchFeed(url){
-      try{ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(r.status); return await r.json(); }
-      catch(e){console.warn('Error loading',url,e); return null;}
-    }
+// --- Render Posts ---
+function renderPosts(){
+  postsContainer.innerHTML='';
+  if(!feedData || !feedData.posts || feedData.posts.length===0){postsContainer.innerHTML='<div>No posts yet.</div>'; postCount.innerText='0'; return;}
+  feedData.posts.sort((a,b)=> new Date(b.time)-new Date(a.time));
+  postCount.innerText = feedData.posts.length;
+  feedData.posts.forEach(p=>{
+    const el=document.createElement('div'); el.className='post';
+    el.innerHTML=`<div class='meta'>${escapeHtml(feedData.username)} • ${new Date(p.time).toLocaleString()}</div><div>${escapeHtml(p.text)}</div>`;
+    postsContainer.appendChild(el);
+  });
+}
 
-    function normalizePost(feedUrl, item){
-      const id=item.id||(item.time?`${item.time}-${Math.random().toString(36).substr(2,5)}`:'p-'+Math.random().toString(36).substr(2,9));
-      const time=item.time||new Date().toISOString();
-      return {...item,id,time,_source:feedUrl};
-    }
+// --- Login ---
+document.getElementById('loginBtn').onclick = ()=>{
+  const u=usernameInput.value.trim();
+  const p=passwordInput.value.trim();
+  if(!feedData) {loginStatus.textContent='Feed not loaded'; return;}
+  if(u===feedData.username && hashPass(p)===feedData.password){
+    loggedIn=true;
+    loginStatus.style.color='green';
+    loginStatus.textContent='Login successful';
+    postText.disabled=false;
+    postBtn.disabled=false;
+  } else {
+    loggedIn=false;
+    loginStatus.style.color='red';
+    loginStatus.textContent='Invalid username or password';
+    postText.disabled=true;
+    postBtn.disabled=true;
+  }
+};
 
-    async function refresh(){
-      posts=[];
-      const results=await Promise.all(feeds.map(f=>fetchFeed(f)));
-      results.forEach((feed,idx)=>{if(feed && feed.posts) feed.posts.forEach(p=>posts.push(normalizePost(feeds[idx],p)));});
-      const local=JSON.parse(localStorage.getItem('openfeed_local_v1')||'null');
-      if(local && local.posts) local.posts.forEach(p=>posts.push(normalizePost('local',p)));
-      posts.sort((a,b)=>new Date(b.time)-new Date(a.time));
-      renderPosts();
-    }
+// --- Post ---
+postBtn.onclick = ()=>{
+  if(!loggedIn) return alert('Login first');
+  const text=postText.value.trim();
+  if(!text) return;
+  const newPost=normalizePost({text});
+  feedData.posts.unshift(newPost);
+  postText.value='';
+  renderPosts();
+};
 
-    function renderPosts(){
-      postsContainer.innerHTML='';
-      $('postCount').innerText=posts.length;
-      if(posts.length===0){postsContainer.innerHTML='<div>No posts yet. Add a feed URL.</div>'; return;}
-      posts.forEach(p=>{
-        const el=document.createElement('div'); el.className='post';
-        el.innerHTML=`<div class='meta'>${escapeHtml(p._source)} • ${new Date(p.time).toLocaleString()}</div><div>${escapeHtml(p.text)}</div>`;
-        postsContainer.appendChild(el);
-      });
-    }
+// --- Export feed.json ---
+document.getElementById('exportBtn').onclick = ()=>{
+  if(!feedData) return;
+  const dataStr = JSON.stringify(feedData,null,2);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([dataStr],{type:'application/json'}));
+  a.download='feed.json';
+  document.body.appendChild(a); a.click(); a.remove();
+};
 
-    function escapeHtml(s){if(!s) return''; return s.replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+// --- Refresh manually ---
+document.getElementById('refresh').onclick = ()=> loadFeed();
 
-    function loadLocal(){const local=JSON.parse(localStorage.getItem('openfeed_local_v1')||'null'); if(local){$('localName').value=local.name||'';}}
-    function saveLocal(name,postsArr){localStorage.setItem('openfeed_local_v1',JSON.stringify({name,posts:postsArr}));}
-    function addLocalPost(){
-      const name=$('localName').value.trim()||'anon';
-      const text=$('localText').value.trim(); if(!text) return alert('Enter text');
-      const time=new Date().toISOString();
-      const id=`${time}-${Math.random().toString(36).substr(2,5)}`;
-      const local=JSON.parse(localStorage.getItem('openfeed_local_v1')||'null')||{name,posts:[]};
-      local.name=name; local.posts.unshift({id,time,text});
-      saveLocal(name,local.posts); $('localText').value=''; refresh();
-    }
+// --- Auto-refresh every 30s ---
+setInterval(loadFeed,30000);
 
-    function download(filename,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'})); a.download=filename; document.body.appendChild(a); a.click(); a.remove();}
-    function downloadMerged(){const merged={generated:new Date().toISOString(),posts}; download('merged_feed.json',JSON.stringify(merged,null,2));}
-    function exportLocalFeed(){const local=JSON.parse(localStorage.getItem('openfeed_local_v1')||'null')||{name:'anon',posts:[]}; const feed={name:local.name,about:'',posts:local.posts}; download('feed.json',JSON.stringify(feed,null,2));}
+// --- Init ---
+loadFeed();
+</script>
 
-    $('addFeed').onclick=()=>{const url=$('feedUrl').value.trim(); if(!url) return; if(feeds.includes(url)) return alert('Feed exists'); feeds.push(url); saveFeeds(); renderFeeds(); $('feedUrl').value=''; refresh();}
-    $('clearFeeds').onclick=()=>{feeds=[]; saveFeeds(); renderFeeds(); refresh();}
-    $('refresh').onclick=()=>refresh();
-    $('localPost').onclick=()=>addLocalPost();
-    $('downloadMerged').onclick=()=>downloadMerged();
-    $('exportFeed').onclick=()=>exportLocalFeed();
-
-    renderFeeds(); loadLocal(); refresh();
-  </script>
 </body>
 </html>
