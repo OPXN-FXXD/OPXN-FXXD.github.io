@@ -3,11 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenFeed — Dark Mode MVP with Likes</title>
+<title>OpenFeed — Advanced Dark Mode</title>
 <style>
-body {
-  background-color:#121212; color:#eee; font-family:system-ui,sans-serif; margin:0; padding:16px;
-}
+body {background:#121212; color:#eee; font-family:system-ui,sans-serif; margin:0; padding:16px;}
 header {display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
 h1 {margin:0; font-size:1.8rem;}
 #clock {font-size:1rem; color:#aaa;}
@@ -23,6 +21,8 @@ button:hover {background:#555;}
 .right {margin-left:auto; color:#aaa;}
 .like-btn {background:#444; color:#eee; padding:4px 8px; border-radius:4px; cursor:pointer;}
 .like-btn:hover {background:#666;}
+#drop-area {border:2px dashed #555; padding:20px; text-align:center; margin-top:8px; border-radius:6px; color:#aaa;}
+#drop-area.dragover {border-color:#888; color:#fff;}
 </style>
 </head>
 <body>
@@ -52,30 +52,11 @@ button:hover {background:#555;}
 <section class="card">
 <h3>New Post</h3>
 <textarea id="postText" rows="3" placeholder="Write your post..." disabled></textarea>
-<input type="file" id="postImage" accept="image/*" disabled>
+<div id="drop-area">Drag & Drop image here (optional)</div>
 <div class="controls">
 <button id="postBtn" disabled>Post</button>
 <button id="exportBtn">Download feed.json</button>
 </div>
-</section>
-
-<section class="card">
-<h3>Example feed.json</h3>
-<pre>{
-  "username": "OPXN-FXXD",
-  "password": "ODQ3NA==",
-  "about": "OpenFeed Enthusiast",
-  "posts": [
-    {
-      "id": "2025-10-29T12:00:00Z-1",
-      "time": "2025-10-29T12:00:00Z",
-      "text": "Hello world!",
-      "image": "",
-      "likes": 0,
-      "views": 0
-    }
-  ]
-}</pre>
 </section>
 
 <script>
@@ -83,6 +64,8 @@ button:hover {background:#555;}
 const FEED_URL = "https://OPXN-FXXD.github.io/feed.json";
 let feedData = null;
 let loggedIn = false;
+let dragImage = null;
+let viewedPosts = new Set();
 
 // --- DOM ---
 const postsContainer = document.getElementById('posts');
@@ -91,14 +74,14 @@ const loginStatus = document.getElementById('loginStatus');
 const usernameInput = document.getElementById('username');
 const passwordInput = document.getElementById('password');
 const postText = document.getElementById('postText');
-const postImage = document.getElementById('postImage');
 const postBtn = document.getElementById('postBtn');
+const dropArea = document.getElementById('drop-area');
 const clockElem = document.getElementById('clock');
 
 // --- Utils ---
 function escapeHtml(s){if(!s)return '';return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function hashPass(pw){return btoa(pw);}
-function normalizePost(item){const id=item.id||(item.time?`${item.time}-${Math.random().toString(36).substr(2,5)}`:'p-'+Math.random().toString(36).substr(2,9));const time=item.time||new Date().toISOString();return {...item,id,time,likes:0,views:0};}
+function normalizePost(item){const id=item.id||(item.time?`${item.time}-${Math.random().toString(36).substr(2,5)}`:'p-'+Math.random().toString(36).substr(2,9));const time=item.time||new Date().toISOString();return {...item,id,time,likes:0,views:0,image:item.image||null};}
 
 // --- Clock ---
 function updateClock(){const now=new Date(); clockElem.textContent=now.toLocaleTimeString();}
@@ -108,9 +91,12 @@ setInterval(updateClock,1000); updateClock();
 async function loadFeed(){
   try{
     const res = await fetch(FEED_URL,{cache:'no-store'});
-    if(!res.ok) throw new Error(res.status);
-    feedData = await res.json();
-    renderPosts();
+    if(res.ok){
+      feedData = await res.json();
+      renderPosts();
+    }else{
+      feedData = {username:'',password:'',about:'',posts:[]};
+    }
   }catch(e){
     console.warn('Error loading feed', e);
     feedData = {username:'',password:'',about:'',posts:[]};
@@ -120,74 +106,75 @@ async function loadFeed(){
 // --- Render Posts ---
 function renderPosts(){
   postsContainer.innerHTML='';
-  if(!feedData || !feedData.posts || feedData.posts.length===0){postsContainer.innerHTML='<div>No posts yet.</div>';postCount.innerText='0';return;}
+  if(!feedData || !feedData.posts || feedData.posts.length===0){postsContainer.innerHTML='<div>No posts yet.</div>'; postCount.innerText='0'; return;}
   const now = new Date();
-  // Filter: nur letzte 24h
-  const posts24h = feedData.posts.filter(p=> new Date(p.time) > new Date(now-24*60*60*1000));
-  // Sort nach Likes absteigend
-  posts24h.sort((a,b)=> b.likes - a.likes);
-  postCount.innerText = posts24h.length;
-  posts24h.forEach((p,i)=>{
+  feedData.posts.forEach(p=>{
+    if(!viewedPosts.has(p.id)){p.views=(p.views||0)+1; viewedPosts.add(p.id);}
+    const ageHours = (now - new Date(p.time))/(1000*60*60);
+    p.displayScore = (p.likes||0 +1) - ageHours/24 + Math.random()*0.5;
+  });
+  feedData.posts.sort((a,b)=>b.displayScore - a.displayScore);
+  postCount.innerText=feedData.posts.length;
+
+  feedData.posts.forEach(p=>{
     const el=document.createElement('div'); el.className='post';
-    p.views = (p.views||0)+1; // views erhöhen
     let html=`<div class='meta'>${escapeHtml(feedData.username)} • ${new Date(p.time).toLocaleString()} • Likes: ${p.likes} • Views: ${p.views}</div>`;
     html+=`<div>${escapeHtml(p.text)}</div>`;
     if(p.image) html+=`<img class='post-image' src='${p.image}'>`;
-    html+=`<button class='like-btn' data-id='${p.id}'>Like</button>`;
+    if(loggedIn) html+=`<button class='like-btn' data-id='${p.id}'>Like</button>`;
     el.innerHTML=html;
     postsContainer.appendChild(el);
   });
 
-  // Like Button Handler
+  // Like button handler
   document.querySelectorAll('.like-btn').forEach(btn=>{
-    btn.onclick = ()=>{
+    btn.onclick=()=>{
       const pid = btn.getAttribute('data-id');
       const post = feedData.posts.find(p=>p.id===pid);
-      if(post){post.likes = (post.likes||0)+1; renderPosts(); }
+      if(post){post.likes=(post.likes||0)+1; renderPosts();}
     };
   });
 }
 
 // --- Login ---
-document.getElementById('loginBtn').onclick = ()=>{
+document.getElementById('loginBtn').onclick=()=>{
   const u=usernameInput.value.trim();
   const p=passwordInput.value.trim();
-  if(!feedData){loginStatus.textContent='Feed not loaded';return;}
+  if(!feedData){loginStatus.textContent='Feed not loaded'; return;}
   if(u===feedData.username && hashPass(p)===feedData.password){
-    loggedIn=true;
-    loginStatus.style.color='lightgreen';
-    loginStatus.textContent='Login successful';
-    postText.disabled=false; postImage.disabled=false; postBtn.disabled=false;
+    loggedIn=true; loginStatus.style.color='lightgreen'; loginStatus.textContent='Login successful';
+    postText.disabled=false; postBtn.disabled=false;
   }else{
-    loggedIn=false;
-    loginStatus.style.color='red';
-    loginStatus.textContent='Invalid username or password';
-    postText.disabled=true; postImage.disabled=true; postBtn.disabled=true;
+    loggedIn=false; loginStatus.style.color='red'; loginStatus.textContent='Invalid username or password';
+    postText.disabled=true; postBtn.disabled=true;
   }
 };
 
 // --- Post ---
-postBtn.onclick = ()=>{
+postBtn.onclick=()=>{
   if(!loggedIn) return alert('Login first');
   const text = postText.value.trim(); if(!text) return;
-  const newPost = normalizePost({text});
-  const file = postImage.files[0];
-  if(file){
-    const reader = new FileReader();
-    reader.onload = e=>{
-      newPost.image = e.target.result;
-      feedData.posts.unshift(newPost);
-      postText.value=''; postImage.value='';
-      renderPosts();
-    };
-    reader.readAsDataURL(file);
-  }else{
-    newPost.image=''; feedData.posts.unshift(newPost); postText.value=''; renderPosts();
-  }
+  const newPost = normalizePost({text,image:dragImage});
+  feedData.posts.unshift(newPost);
+  postText.value=''; dragImage=null; dropArea.textContent='Drag & Drop image here (optional)';
+  renderPosts();
 };
 
+// --- Drag & Drop ---
+dropArea.addEventListener('dragover', e=>{e.preventDefault(); dropArea.classList.add('dragover');});
+dropArea.addEventListener('dragleave', e=>{e.preventDefault(); dropArea.classList.remove('dragover');});
+dropArea.addEventListener('drop', e=>{
+  e.preventDefault(); dropArea.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if(file && file.type.startsWith('image/')){
+    const reader = new FileReader();
+    reader.onload = ev=>{dragImage = ev.target.result; dropArea.textContent='Image ready';}
+    reader.readAsDataURL(file);
+  }else{dropArea.textContent='Invalid file';}
+});
+
 // --- Export feed.json ---
-document.getElementById('exportBtn').onclick = ()=>{
+document.getElementById('exportBtn').onclick=()=>{
   if(!feedData) return;
   const dataStr = JSON.stringify(feedData,null,2);
   const a=document.createElement('a');
@@ -195,10 +182,8 @@ document.getElementById('exportBtn').onclick = ()=>{
   a.download='feed.json'; document.body.appendChild(a); a.click(); a.remove();
 };
 
-// --- Refresh manually ---
-document.getElementById('refresh').onclick = ()=> loadFeed();
-
-// --- Auto-refresh every 30s ---
+// --- Refresh ---
+document.getElementById('refresh').onclick=()=>loadFeed();
 setInterval(loadFeed,30000);
 
 // --- Init ---
