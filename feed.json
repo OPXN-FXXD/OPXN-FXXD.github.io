@@ -1,0 +1,12 @@
+{
+  "name": "OPXN-FXXD",
+  "about": "OpenFeed Enthusiast",
+  "posts": [
+    {
+      "id": "2025-10-29T12:00:00Z-1",
+      "time": "2025-10-29T12:00:00Z",
+      "text": "Hi so that's it now.",
+      "meta": {"tags": ["intro"]}
+    }
+  ]
+}
