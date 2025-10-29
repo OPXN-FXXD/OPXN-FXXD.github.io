@@ -1,0 +1,15 @@
+{
+  "username": "T9T",
+  "password": "RElOODUwMA==",
+  "about": "New OpenFeed user",
+  "posts": [
+    {
+      "id": "2025-10-29T12:00:00Z-1",
+      "time": "2025-10-29T12:00:00Z",
+      "text": "Hello — this is my first OpenFeed post!",
+      "image": "",
+      "likes": 0,
+      "views": 0
+    }
+  ]
+}
