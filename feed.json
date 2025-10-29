@@ -8,24 +8,24 @@
       "time": "2025-10-29T12:00:00Z",
       "text": "Hello world! My first OpenFeed post 🎉",
       "image": "",
-      "likes": 0,
-      "views": 0
+      "likes": 3,
+      "views": 10
     },
     {
       "id": "2025-10-30T09:00:00Z-2",
       "time": "2025-10-30T09:00:00Z",
       "text": "Testing image upload in OpenFeed.",
       "image": "",
-      "likes": 2,
-      "views": 5
+      "likes": 5,
+      "views": 15
     },
     {
       "id": "2025-10-30T15:30:00Z-3",
       "time": "2025-10-30T15:30:00Z",
       "text": "Another post with some likes.",
       "image": "",
-      "likes": 5,
-      "views": 10
+      "likes": 8,
+      "views": 20
     }
   ]
 }
