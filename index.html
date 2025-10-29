@@ -1,29 +1,35 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>OpenFeed — Secure MVP with Images</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenFeed — Dark Mode MVP with Likes</title>
 <style>
-body{max-width:900px;margin:20px auto;padding:16px;font-family:system-ui,sans-serif;line-height:1.4}
-h1,h3{margin-bottom:8px}
-input,textarea,button{font:inherit;padding:6px}
-.card{border:1px solid #ccc;padding:12px;border-radius:8px;margin:12px 0}
-.feed-list{display:flex;flex-wrap:wrap;gap:8px}
-.feed-item{background:#f1f1f1;padding:6px 8px;border-radius:6px;border:1px solid #ddd;display:flex;align-items:center}
-.posts{margin-top:12px;max-height:500px;overflow-y:auto;border:1px solid #ddd;padding:8px;border-radius:6px;background:#fafafa}
-.post{padding:10px;border-bottom:1px dashed #ccc}
-.meta{font-size:12px;color:#555;margin-bottom:4px}
-.controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
-.flex{display:flex;gap:8px}
-.right{margin-left:auto}
-img.post-image{max-width:100%;margin-top:6px;border-radius:6px}
+body {
+  background-color:#121212; color:#eee; font-family:system-ui,sans-serif; margin:0; padding:16px;
+}
+header {display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+h1 {margin:0; font-size:1.8rem;}
+#clock {font-size:1rem; color:#aaa;}
+input,textarea,button {font:inherit; padding:6px; border-radius:4px; border:1px solid #444; background:#1e1e1e; color:#eee;}
+button {cursor:pointer; background:#333; color:#eee;}
+button:hover {background:#555;}
+.card {background:#1e1e1e; padding:16px; border-radius:10px; margin:16px 0; box-shadow:0 2px 5px rgba(0,0,0,0.5);}
+.posts {max-height:600px; overflow-y:auto; padding:12px; border-radius:8px; background:#222; border:1px solid #444;}
+.post {padding:12px; margin-bottom:12px; border-bottom:1px dashed #555; border-radius:6px; background:#2a2a2a;}
+.meta {font-size:12px; color:#aaa; margin-bottom:6px;}
+.post-image {max-width:100%; margin-top:6px; border-radius:6px;}
+.controls {display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;}
+.right {margin-left:auto; color:#aaa;}
+.like-btn {background:#444; color:#eee; padding:4px 8px; border-radius:4px; cursor:pointer;}
+.like-btn:hover {background:#666;}
 </style>
 </head>
 <body>
+
 <header>
-<h1>OpenFeed — MVP with Images</h1>
-<p>Decentralized feed client with login, automatic updates and image support.</p>
+<h1>OpenFeed Dark Mode</h1>
+<div id="clock"></div>
 </header>
 
 <section class="card">
@@ -37,8 +43,8 @@ img.post-image{max-width:100%;margin-top:6px;border-radius:6px}
 
 <section class="card">
 <h3>Login to Post</h3>
-<input id="username" placeholder="Username" />
-<input id="password" type="password" placeholder="Password" />
+<input id="username" placeholder="Username">
+<input id="password" type="password" placeholder="Password">
 <button id="loginBtn">Login</button>
 <p id="loginStatus" style="color:red;"></p>
 </section>
@@ -46,7 +52,7 @@ img.post-image{max-width:100%;margin-top:6px;border-radius:6px}
 <section class="card">
 <h3>New Post</h3>
 <textarea id="postText" rows="3" placeholder="Write your post..." disabled></textarea>
-<input type="file" id="postImage" accept="image/*" disabled />
+<input type="file" id="postImage" accept="image/*" disabled>
 <div class="controls">
 <button id="postBtn" disabled>Post</button>
 <button id="exportBtn">Download feed.json</button>
@@ -63,16 +69,14 @@ img.post-image{max-width:100%;margin-top:6px;border-radius:6px}
     {
       "id": "2025-10-29T12:00:00Z-1",
       "time": "2025-10-29T12:00:00Z",
-      "text": "Hello world! My first OpenFeed post 🎉",
-      "image": ""
+      "text": "Hello world!",
+      "image": "",
+      "likes": 0,
+      "views": 0
     }
   ]
 }</pre>
 </section>
-
-<footer>
-<p>To host: Create a GitHub repository named OPXN-FXXD.github.io, upload feed.json and index.html, enable GitHub Pages. Site URL: https://OPXN-FXXD.github.io</p>
-</footer>
 
 <script>
 // --- Config ---
@@ -89,11 +93,16 @@ const passwordInput = document.getElementById('password');
 const postText = document.getElementById('postText');
 const postImage = document.getElementById('postImage');
 const postBtn = document.getElementById('postBtn');
+const clockElem = document.getElementById('clock');
 
 // --- Utils ---
-function escapeHtml(s){if(!s)return'';return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function escapeHtml(s){if(!s)return '';return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function hashPass(pw){return btoa(pw);}
-function normalizePost(item){const id=item.id||(item.time?`${item.time}-${Math.random().toString(36).substr(2,5)}`:'p-'+Math.random().toString(36).substr(2,9));const time=item.time||new Date().toISOString();return {...item,id,time};}
+function normalizePost(item){const id=item.id||(item.time?`${item.time}-${Math.random().toString(36).substr(2,5)}`:'p-'+Math.random().toString(36).substr(2,9));const time=item.time||new Date().toISOString();return {...item,id,time,likes:0,views:0};}
+
+// --- Clock ---
+function updateClock(){const now=new Date(); clockElem.textContent=now.toLocaleTimeString();}
+setInterval(updateClock,1000); updateClock();
 
 // --- Load Feed ---
 async function loadFeed(){
@@ -108,24 +117,34 @@ async function loadFeed(){
   }
 }
 
-// --- Render Posts with simple algorithm ---
+// --- Render Posts ---
 function renderPosts(){
   postsContainer.innerHTML='';
   if(!feedData || !feedData.posts || feedData.posts.length===0){postsContainer.innerHTML='<div>No posts yet.</div>';postCount.innerText='0';return;}
-  // Algorithm: prioritize newer posts + random boost
-  feedData.posts.sort((a,b)=>{
-    const ageScore=(new Date(b.time)-new Date(a.time))/1000; // newer= higher
-    const boost=Math.random()*50; // random small boost
-    return (ageScore+boost)-(new Date(a.time)-new Date(b.time));
-  });
-  postCount.innerText=feedData.posts.length;
-  feedData.posts.forEach(p=>{
+  const now = new Date();
+  // Filter: nur letzte 24h
+  const posts24h = feedData.posts.filter(p=> new Date(p.time) > new Date(now-24*60*60*1000));
+  // Sort nach Likes absteigend
+  posts24h.sort((a,b)=> b.likes - a.likes);
+  postCount.innerText = posts24h.length;
+  posts24h.forEach((p,i)=>{
     const el=document.createElement('div'); el.className='post';
-    let html=`<div class='meta'>${escapeHtml(feedData.username)} • ${new Date(p.time).toLocaleString()}</div>`;
+    p.views = (p.views||0)+1; // views erhöhen
+    let html=`<div class='meta'>${escapeHtml(feedData.username)} • ${new Date(p.time).toLocaleString()} • Likes: ${p.likes} • Views: ${p.views}</div>`;
     html+=`<div>${escapeHtml(p.text)}</div>`;
-    if(p.image) html+=`<img class='post-image' src='${p.image}'/>`;
+    if(p.image) html+=`<img class='post-image' src='${p.image}'>`;
+    html+=`<button class='like-btn' data-id='${p.id}'>Like</button>`;
     el.innerHTML=html;
     postsContainer.appendChild(el);
+  });
+
+  // Like Button Handler
+  document.querySelectorAll('.like-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const pid = btn.getAttribute('data-id');
+      const post = feedData.posts.find(p=>p.id===pid);
+      if(post){post.likes = (post.likes||0)+1; renderPosts(); }
+    };
   });
 }
 
@@ -136,27 +155,22 @@ document.getElementById('loginBtn').onclick = ()=>{
   if(!feedData){loginStatus.textContent='Feed not loaded';return;}
   if(u===feedData.username && hashPass(p)===feedData.password){
     loggedIn=true;
-    loginStatus.style.color='green';
+    loginStatus.style.color='lightgreen';
     loginStatus.textContent='Login successful';
-    postText.disabled=false;
-    postImage.disabled=false;
-    postBtn.disabled=false;
+    postText.disabled=false; postImage.disabled=false; postBtn.disabled=false;
   }else{
     loggedIn=false;
     loginStatus.style.color='red';
     loginStatus.textContent='Invalid username or password';
-    postText.disabled=true;
-    postImage.disabled=true;
-    postBtn.disabled=true;
+    postText.disabled=true; postImage.disabled=true; postBtn.disabled=true;
   }
 };
 
 // --- Post ---
 postBtn.onclick = ()=>{
   if(!loggedIn) return alert('Login first');
-  const text=postText.value.trim();
-  if(!text) return;
-  const newPost=normalizePost({text});
+  const text = postText.value.trim(); if(!text) return;
+  const newPost = normalizePost({text});
   const file = postImage.files[0];
   if(file){
     const reader = new FileReader();
@@ -168,10 +182,7 @@ postBtn.onclick = ()=>{
     };
     reader.readAsDataURL(file);
   }else{
-    newPost.image='';
-    feedData.posts.unshift(newPost);
-    postText.value='';
-    renderPosts();
+    newPost.image=''; feedData.posts.unshift(newPost); postText.value=''; renderPosts();
   }
 };
 
@@ -181,8 +192,7 @@ document.getElementById('exportBtn').onclick = ()=>{
   const dataStr = JSON.stringify(feedData,null,2);
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([dataStr],{type:'application/json'}));
-  a.download='feed.json';
-  document.body.appendChild(a); a.click(); a.remove();
+  a.download='feed.json'; document.body.appendChild(a); a.click(); a.remove();
 };
 
 // --- Refresh manually ---
