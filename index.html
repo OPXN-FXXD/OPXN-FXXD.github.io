@@ -3,35 +3,41 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>OPENFEED — P2P mit Likes & Sprache</title>
+<title>OPENFEED — P2P Multi-Page (Feed / Profil / Posten)</title>
 <style>
-  body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:#f7f8fb;color:#0b1220}
-  header{background:#0b5fff;color:white;padding:1rem}
-  .wrap{max-width:980px;margin:1rem auto;padding:1rem;background:white;border-radius:8px;box-shadow:0 6px 20px rgba(11,95,255,0.06)}
+  :root{--brand:#0b5fff;--muted:#6b7280}
+  body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:#f7f8fb;color:#0b1220;min-height:100vh;display:flex;flex-direction:column}
+  header{background:var(--brand);color:white;padding:0.9rem 1rem;position:sticky;top:0;z-index:20}
+  .container{max-width:1000px;margin:1rem auto;padding:1rem;background:white;border-radius:10px;box-shadow:0 8px 30px rgba(11,95,255,0.06);flex:1}
+  .grid{display:grid;grid-template-columns:1fr 320px;gap:1rem}
   input,textarea,select,button{font:inherit}
-  .row{display:flex;gap:0.5rem}
-  .col{display:flex;flex-direction:column;gap:0.5rem}
-  .btn{background:#0b5fff;color:white;padding:0.5rem;border-radius:6px;border:0;cursor:pointer}
-  .btn.secondary{background:#eef4ff;color:#0b5fff;border:1px solid #cfe0ff;color:#0b5fff}
-  .muted{color:#6b7280;font-size:0.9rem}
+  .muted{color:var(--muted);font-size:0.9rem}
   .message{padding:0.6rem;border-bottom:1px solid #eee;border-radius:6px;margin-bottom:0.5rem;background:#fff}
+  .btn{background:var(--brand);color:white;padding:0.5rem;border-radius:8px;border:0;cursor:pointer}
+  .btn.ghost{background:#eef4ff;color:var(--brand);border:1px solid #cfe0ff}
   .like-btn{background:none;border:1px solid #e6e9ee;padding:0.25rem 0.5rem;border-radius:6px;cursor:pointer}
   .liked{background:#ffdce0;border-color:#ff9aa2}
   .lang-pill{display:inline-block;padding:0.15rem 0.4rem;border-radius:4px;border:1px solid #e6e9ee;margin-left:0.4rem;font-size:0.8rem}
+  footer.nav{position:fixed;left:0;right:0;bottom:0;background:white;border-top:1px solid #eee;padding:0.5rem 0;display:flex;justify-content:center;gap:1rem;z-index:40}
+  footer.nav button{width:120px;border-radius:999px}
+  .top-private{background:#fff7f3;border-left:4px solid #ff9aa2;padding:0.6rem;border-radius:6px;margin-bottom:0.8rem}
+  .hidden{display:none}
+  @media (max-width:900px){ .grid{grid-template-columns:1fr} aside{order:2} }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/gun/gun.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
 </head>
 <body>
-<header><h1 style="margin:0">OPENFEED — P2P (Likes & Sprache)</h1></header>
-<div class="wrap">
-  <div style="display:flex;gap:1rem">
-    <div style="flex:1">
-      <section style="margin-bottom:1rem">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <h3 style="margin:0">Feed</h3>
+<header><h1 style="margin:0">OPENFEED — P2P (Feed / Profil / Posten)</h1></header>
+
+<div class="container">
+  <div id="page-feed" class="page">
+    <div class="grid">
+      <main>
+        <section class="muted" style="display:flex;justify-content:space-between;align-items:center">
+          <div><strong>Feed</strong></div>
           <div>
-            <label for="filterLang" class="muted">Filter:</label>
+            <label class="muted">Filter:</label>
             <select id="filterLang" style="padding:0.3rem">
               <option value="all">All</option>
               <option value="en">English</option>
@@ -43,17 +49,60 @@
               <option value="ru">Русский</option>
             </select>
           </div>
-        </div>
-        <div id="feed" class="col" style="margin-top:0.8rem"></div>
-      </section>
+        </section>
 
-      <section style="margin-bottom:1rem">
-        <h3>Neuen Beitrag erstellen</h3>
-        <textarea id="postText" rows="3" style="width:100%;padding:0.5rem"></textarea>
-        <div style="display:flex;gap:0.5rem;margin-top:0.5rem;align-items:center">
-          <label class="muted">Sprache:</label>
-          <select id="postLang" style="padding:0.3rem">
-            <option value="en">English (default)</option>
+        <section style="margin-top:1rem">
+          <div id="privateInboxArea" class="hidden">
+            <h4>Private Nachrichten (für dich)</h4>
+            <div id="privateInbox"></div>
+          </div>
+
+          <div id="feed" style="margin-top:0.8rem"></div>
+        </section>
+      </main>
+
+      <aside>
+        <section style="margin-bottom:1rem">
+          <h4>Kurzanleitung</h4>
+          <div class="muted">
+            - Navigation unten: Feed / Profil / Posten.<br>
+            - Private Nachrichten (E2E) erscheinen oben im Feed nur für dich.<br>
+            - Likes & Sprache bleiben aktiv.
+          </div>
+        </section>
+
+        <section style="margin-top:1rem">
+          <h4>Suche Profil</h4>
+          <input id="quickLookup" placeholder="username oder pub" style="width:100%;padding:0.5rem"><div style="margin-top:0.5rem"><button class="btn ghost" id="btnLookup">Lookup</button></div>
+          <div id="lookupResult" style="margin-top:0.5rem" class="muted"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <div id="page-profile" class="page hidden">
+    <div class="grid">
+      <main>
+        <section>
+          <h3>Profil</h3>
+          <div id="profileBox" class="muted">Nicht eingeloggt</div>
+        </section>
+
+        <section style="margin-top:1rem">
+          <h4>Identität erstellen / laden</h4>
+          <input id="userName" placeholder="Benutzername" style="width:100%;padding:0.5rem">
+          <input id="userPass" placeholder="Passphrase (optional)" style="width:100%;padding:0.5rem;margin-top:0.5rem">
+          <div style="display:flex;gap:0.5rem;margin-top:0.6rem">
+            <button class="btn" id="btnCreateUser">Erstelle Identität</button>
+            <button class="btn ghost" id="btnLoginUser">Lade Identität</button>
+          </div>
+        </section>
+
+        <section style="margin-top:1rem">
+          <h4>Sprache & Export</h4>
+          <label class="muted">Bevorzugte Sprache</label>
+          <select id="profileLang" style="width:100%;padding:0.5rem;margin-top:0.3rem">
+            <option value="en">English</option>
             <option value="de">Deutsch</option>
             <option value="fr">Français</option>
             <option value="ja">日本語</option>
@@ -61,37 +110,34 @@
             <option value="es">Español</option>
             <option value="ru">Русский</option>
           </select>
-          <button class="btn" id="btnPost">Posten</button>
-          <button class="btn secondary" id="btnClear">Leeren</button>
-        </div>
-      </section>
-
-      <section>
-        <h3>Private Nachricht (verschlüsselt)</h3>
-        <div class="row">
-          <input id="pmTo" placeholder="Empfänger PublicKey oder username" style="flex:1;padding:0.5rem">
-          <button class="btn secondary" id="btnResolve">Resolve</button>
-        </div>
-        <textarea id="pmText" rows="3" style="width:100%;padding:0.5rem;margin-top:0.5rem"></textarea>
-        <div style="margin-top:0.5rem"><button class="btn" id="btnSendPM">Senden (verschlüsselt)</button></div>
-      </section>
-    </div>
-
-    <aside style="width:320px">
-      <section style="margin-bottom:1rem">
-        <h4>Profil & Sprache</h4>
-        <div id="profileBox" class="muted">Nicht eingeloggt</div>
-        <div style="margin-top:0.5rem">
-          <input id="userName" placeholder="Benutzername" style="width:100%;padding:0.4rem">
-          <input id="userPass" placeholder="Passphrase (optional)" style="width:100%;padding:0.4rem;margin-top:0.4rem">
-          <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-            <button class="btn" id="btnCreateUser">Erstelle Identität</button>
-            <button class="btn secondary" id="btnLoginUser">Lade Identität</button>
+          <div style="display:flex;gap:0.5rem;margin-top:0.6rem">
+            <button class="btn" id="btnSaveLang">Speichern</button>
+            <button class="btn ghost" id="btnExportProfile">Profil exportieren</button>
           </div>
+        </section>
+      </main>
 
-          <div style="margin-top:0.6rem">
-            <label class="muted">Sprache bevorzugt: </label>
-            <select id="profileLang" style="width:100%;padding:0.4rem;margin-top:0.3rem">
+      <aside>
+        <section>
+          <h4>Hinweise</h4>
+          <div class="muted">
+            - Private keys bleiben lokal (localStorage). Sichere sie offline.<br>
+            - Veröffentliche nur public profile-json (kein privater Key).
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <div id="page-post" class="page hidden">
+    <div class="grid">
+      <main>
+        <section>
+          <h3>Posten</h3>
+          <textarea id="postText" rows="5" style="width:100%;padding:0.6rem"></textarea>
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.6rem">
+            <label class="muted">Sprache</label>
+            <select id="postLang" style="padding:0.3rem;margin-left:0.3rem">
               <option value="en">English</option>
               <option value="de">Deutsch</option>
               <option value="fr">Français</option>
@@ -100,35 +146,39 @@
               <option value="es">Español</option>
               <option value="ru">Русский</option>
             </select>
-            <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-              <button class="btn" id="btnSaveLang">Speichern</button>
-              <button class="btn secondary" id="btnExportProfile">Profil exportieren</button>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <section>
-        <h4>Hinweise</h4>
-        <div class="muted">
-          - Du musst eingeloggt sein, um zu liken. Jeder User kann einen Post max. 1× liken (toggle erlaubt).<br>
-          - Posts haben eine Sprache; der Feed priorisiert deine bevorzugte Sprache.<br>
-          - Persistenz hängt von den genutzten öffentlichen Relays.
-        </div>
-      </section>
-    </aside>
+            <input id="postRecipient" placeholder="Empfänger (all oder username/pub)" style="flex:1;padding:0.4rem;margin-left:0.5rem">
+            <button class="btn" id="btnPublish">Veröffentlichen</button>
+          </div>
+          <div id="postStatus" class="muted" style="margin-top:0.6rem"></div>
+        </section>
+      </main>
+
+      <aside>
+        <section>
+          <h4>Private Nachricht</h4>
+          <div class="muted">Wenn du als Empfänger einen PublicKey angibst oder einen existierenden username, wird die Nachricht E2E verschlüsselt und nur dem Empfänger zugänglich gemacht (erscheint dann oben im Feed für ihn).</div>
+        </section>
+      </aside>
+    </div>
   </div>
 </div>
 
+<footer class="nav">
+  <button id="navFeed" class="btn">Feed</button>
+  <button id="navProfile" class="btn ghost">Profil</button>
+  <button id="navPost" class="btn ghost">Posten</button>
+</footer>
+
 <script>
-/* P2P OPENFEED mit:
-   - Gun.js + SEA
-   - Likes: gun.get('post_likes').get(postId).set(pub)
-   - Posts: gun.get('openfeed_posts').set({id, authorName, authorPub, text, lang, time})
-   - Profiles: gun.get('openfeed_profiles').get(username).put({username, pub, lang})
-   - Local identity in localStorage 'openfeed_user'
+/* OPENFEED P2P — Multi-Page single-file SPA
+   Features:
+   - Feed / Profile / Posten pages
+   - Private messages appear at top of feed for logged-in user (decrypted)
+   - Likes, languages, profiles, Gun.js + SEA
 */
 
+// --- Gun setup ---
 const gun = Gun({
   peers: [
     'https://gun-manhattan.herokuapp.com/gun',
@@ -137,31 +187,46 @@ const gun = Gun({
 });
 const postsNode = gun.get('openfeed_posts');
 const profilesNode = gun.get('openfeed_profiles');
-const likesNode = gun.get('post_likes');
+const likesNode = gun.get('likes_by_post');
 const messagesNode = gun.get('openfeed_messages');
 
 const $ = id => document.getElementById(id);
 function escapeHtml(s){ if(!s) return ''; return s.toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;') }
 
-let localUser = null; // { username, pair }
+let localUser = null; // { username, pair, lang }
+const postsStore = {};    // id -> post
+const inboxStore = [];    // decrypted private messages for current user
 
-// in-memory posts store for sorting/prioritization
-const postsStore = {}; // key => postObject
+// -------------------- SPA Navigation --------------------
+function showPage(pageId){
+  document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
+  $(pageId).classList.remove('hidden');
+  // update footer active buttons
+  $('navFeed').classList.toggle('btn', pageId==='page-feed');
+  $('navFeed').classList.toggle('ghost', pageId!=='page-feed');
+  $('navProfile').classList.toggle('btn', pageId==='page-profile');
+  $('navProfile').classList.toggle('ghost', pageId!=='page-profile');
+  $('navPost').classList.toggle('btn', pageId==='page-post');
+  $('navPost').classList.toggle('ghost', pageId!=='page-post');
+}
+$('navFeed').addEventListener('click', ()=> showPage('page-feed'));
+$('navProfile').addEventListener('click', ()=> showPage('page-profile'));
+$('navPost').addEventListener('click', ()=> showPage('page-post'));
 
-// -------------------- Profile / Identity --------------------
+// default open feed
+showPage('page-feed');
+
+// -------------------- Identity / Profile --------------------
 async function createIdentity(username, passphrase){
   if(!username) return alert('Bitte Benutzernamen angeben.');
-  // create SEA pair; if passphrase given, use pair(passphrase) to derive (warning: passphrase must be strong)
   const pair = passphrase ? await SEA.pair(passphrase) : await SEA.pair();
-  localUser = { username, pair };
+  localUser = { username, pair, lang: $('profileLang').value || 'en' };
   localStorage.setItem('openfeed_user', JSON.stringify(localUser));
-  // default language in profile = English
-  const profile = { username, pub: pair.pub, lang: (document.getElementById('profileLang').value || 'en'), createdAt: new Date().toISOString() };
+  const profile = { username, pub: pair.pub, lang: localUser.lang, createdAt: new Date().toISOString() };
   profilesNode.get(username).put(profile);
   renderProfile(profile);
-  watchInbox();
-  alert('Identität erstellt. PublicKey:\\n' + pair.pub);
-  return profile;
+  watchInbox(); // start listening for privates
+  alert('Identität erstellt. PublicKey: ' + pair.pub);
 }
 
 function loadIdentity(){
@@ -169,34 +234,38 @@ function loadIdentity(){
   if(!raw) return null;
   try{
     localUser = JSON.parse(raw);
-    // if stored as object with pair fields serialised, okay
-    const profile = { username: localUser.username, pub: localUser.pair.pub, lang: localUser.lang || 'en' };
-    renderProfile(profile);
-    // load saved preferred lang into selector
-    $('profileLang').value = profile.lang || 'en';
+    $('profileLang').value = localUser.lang || 'en';
+    renderProfile({ username: localUser.username, pub: localUser.pair.pub, lang: localUser.lang });
     watchInbox();
-    return profile;
+    return localUser;
   } catch(e){ console.error(e); return null; }
 }
 
 function renderProfile(profile){
-  $('profileBox').innerHTML = `<div><strong>${escapeHtml(profile.username)}</strong></div><div class="muted">PubKey: ${escapeHtml(profile.pub)}</div><div style="margin-top:0.4rem" class="muted">Bevorzugte Sprache: ${escapeHtml(profile.lang || 'en')}</div>`;
+  $('profileBox').innerHTML = `<div><strong>${escapeHtml(profile.username)}</strong></div>
+    <div class="muted" style="margin-top:0.3rem">PubKey: ${escapeHtml(profile.pub)}</div>
+    <div class="muted" style="margin-top:0.3rem">Sprache: ${escapeHtml(profile.lang || 'en')}</div>`;
 }
 
-// save preferred language to profile in Gun and locally
+$('btnCreateUser').addEventListener('click', async ()=>{
+  await createIdentity($('userName').value.trim(), $('userPass').value || null);
+});
+$('btnLoginUser').addEventListener('click', ()=>{
+  const u = loadIdentity();
+  if(!u) alert('Keine lokale Identität gefunden.');
+  else alert('Identität geladen: ' + u.username);
+});
+
 $('btnSaveLang').addEventListener('click', ()=>{
-  if(!localUser) return alert('Bitte zuerst Identität erstellen / laden.');
-  const lang = $('profileLang').value;
-  const profile = { username: localUser.username, pub: localUser.pair.pub, lang, updatedAt: new Date().toISOString() };
-  profilesNode.get(localUser.username).put(profile);
-  // also store locally
-  localUser.lang = lang;
+  if(!localUser) return alert('Bitte erst Identität erstellen / laden.');
+  localUser.lang = $('profileLang').value;
   localStorage.setItem('openfeed_user', JSON.stringify(localUser));
-  renderProfile(profile);
+  // update profile node
+  profilesNode.get(localUser.username).put({ username: localUser.username, pub: localUser.pair.pub, lang: localUser.lang, updatedAt: new Date().toISOString() });
+  renderProfile({ username: localUser.username, pub: localUser.pair.pub, lang: localUser.lang });
   alert('Sprache gespeichert.');
 });
 
-// export profile JSON (public fields only)
 $('btnExportProfile').addEventListener('click', ()=>{
   if(!localUser) return alert('Keine Identität vorhanden.');
   const out = { username: localUser.username, pub: localUser.pair.pub, lang: localUser.lang || 'en', createdAt: new Date().toISOString() };
@@ -205,154 +274,86 @@ $('btnExportProfile').addEventListener('click', ()=>{
   const a = document.createElement('a'); a.href = url; a.download = `${out.username}.openfeed.profile.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 });
 
-// button handlers for create/load identity
-$('btnCreateUser').addEventListener('click', async ()=>{
-  const u = $('userName').value.trim();
-  const p = $('userPass').value || null;
-  await createIdentity(u, p);
-});
-$('btnLoginUser').addEventListener('click', ()=>{
-  const prof = loadIdentity();
-  if(!prof) alert('Keine lokale Identität gefunden. Erstelle zuerst eine Identität.');
-  else alert('Identität geladen: ' + prof.username);
+// quick lookup
+$('btnLookup').addEventListener('click', ()=>{
+  const id = $('quickLookup').value.trim();
+  if(!id) return alert('Bitte eingeben.');
+  if(id.length>40 || id.indexOf('=')>-1){ $('lookupResult').textContent = 'Looks like a public key: ' + id; return; }
+  profilesNode.get(id).once(v=>{
+    if(v) $('lookupResult').textContent = `Found: ${v.username} (pub ${v.pub}), lang=${v.lang || 'en'}`; else $('lookupResult').textContent = 'Nicht gefunden';
+  });
 });
 
-// auto-load identity if present
-loadIdentity();
-
-// -------------------- Posting --------------------
-$('btnPost').addEventListener('click', ()=>{
+// -------------------- Posting (public & private) --------------------
+$('btnPublish').addEventListener('click', async ()=>{
   const text = $('postText').value.trim();
-  if(!text) return alert('Bitte Text eingeben.');
+  if(!text) return alert('Text eingeben.');
   const lang = $('postLang').value || 'en';
+  const recipient = $('postRecipient').value.trim() || 'all';
+  const id = 'p' + Date.now() + Math.random().toString(36).slice(2,8);
   let authorName = 'anonym', authorPub = null;
   if(localUser){ authorName = localUser.username; authorPub = localUser.pair.pub; }
-  // create a unique id (timestamp + random)
-  const id = 'p' + Date.now() + Math.random().toString(36).slice(2,8);
-  const obj = { id, authorName, authorPub, text, lang, time: Date.now() };
-  postsNode.set(obj);
-  $('postText').value = '';
-  alert('Post veröffentlicht.');
+  const base = { id, authorName, authorPub, lang, time: Date.now() };
+
+  if(recipient === 'all' || recipient === '') {
+    const obj = Object.assign({}, base, { text, recipient:'all', public:true });
+    postsNode.set(obj);
+    $('postStatus').textContent = 'Öffentlicher Post veröffentlicht.';
+  } else {
+    // try resolve recipient to public key
+    const pub = await resolveRecipient(recipient);
+    if(pub){
+      // encrypt with SEA.secret
+      if(!localUser) return alert('Nur eingeloggte Nutzer können private verschlüsselte Posts senden.');
+      const secret = await SEA.secret(pub, localUser.pair);
+      const cipher = await SEA.encrypt(text, secret);
+      // store as a message for pub (will be decrypted by recipient)
+      messagesNode.get(pub).set({ from: localUser.username, fromPub: localUser.pair.pub, payload: cipher, time: Date.now(), id });
+      $('postStatus').textContent = 'Verschlüsselte Nachricht gesendet (privat).';
+    } else {
+      // fallback: create a recipient-labeled non-public post (only visible as metadata but not truly private)
+      const obj = Object.assign({}, base, { text, recipient, public:false });
+      postsNode.set(obj);
+      $('postStatus').textContent = 'Post erstellt (Privat-Label) — Empfänger nicht aufgelöst; kein E2E.';
+    }
+  }
+  $('postText').value='';
 });
 
-// Clear button
-$('btnClear').addEventListener('click', ()=> $('postText').value='');
-
-// -------------------- Likes --------------------
-// like toggle: user can like only when logged in; each user's pub can only appear once per post
-async function toggleLike(post){
-  if(!localUser) return alert('Du musst eingeloggt sein, um zu liken.');
-  const myPub = localUser.pair.pub;
-  const likeSet = likesNode.get(post.id);
-  // check if already liked by scanning the set (once)
-  let already = false;
-  await new Promise(resolve => {
-    likeSet.map().once((v,k)=>{
-      if(!v) return;
-      if(v === myPub) already = true;
+// resolve recipient helper (username -> pub) or accept pub directly
+function resolveRecipient(identifier){
+  if(!identifier) return Promise.resolve(null);
+  if(identifier.length>40 || identifier.indexOf('=')>-1) return Promise.resolve(identifier); // assume pubkey
+  return new Promise(resolve => {
+    profilesNode.get(identifier).once(v=>{
+      if(v && v.pub) resolve(v.pub); else resolve(null);
     });
-    // small timeout to allow Gun to respond
-    setTimeout(resolve, 250);
   });
-  if(!already){
-    likeSet.set(myPub);
-  } else {
-    // Gun doesn't have a direct delete from set easily; approach: write a tombstone: likes_removed.{postId}.{pub}=true
-    // Simpler approach: maintain likes as object keyed by pub: likesNode.get(post.id).get(pub).put(true) and count keys.
-    // We'll implement removal via a different structure: likes_by_post.{id}.{pub} = true/false
-    // For compatibility, here implement removal by writing a negative mark:
-    likesNode.get(post.id + '_removed').get(myPub).put(true);
-  }
 }
 
-// improved like model: likes_by_post.{postId}.{pub} = true if liked; if false/undefined => not liked
-// We'll write likes both ways for compatibility when toggling
-async function setLikeBool(post, value){
-  if(!localUser) return alert('Bitte einloggen.');
+// -------------------- Likes system --------------------
+async function toggleLike(postId){
+  if(!localUser) return alert('Bitte einloggen um zu liken.');
   const myPub = localUser.pair.pub;
-  const node = gun.get('likes_by_post').get(post.id);
-  node.get(myPub).put(value ? true : null); // putting null should remove
-}
-
-// helper to count likes and check current user liked
-function fetchLikesForPost(post, cb){
-  const node = gun.get('likes_by_post').get(post.id);
-  const likes = new Set();
-  node.map().once((v,k)=>{
-    if(v) likes.add(k);
-  });
-  // small timeout to collect values
-  setTimeout(()=> cb(Array.from(likes)), 300);
-}
-
-// -------------------- Rendering feed --------------------
-function renderAllPosts(userPrefLang){
-  // convert postsStore to array
-  const arr = Object.values(postsStore);
-  // sort: prefer posts with lang === userPrefLang first, then others; inside each group sort by time desc
-  arr.sort((a,b)=>{
-    const aPref = (a.lang === userPrefLang) ? 0 : 1;
-    const bPref = (b.lang === userPrefLang) ? 0 : 1;
-    if(aPref !== bPref) return aPref - bPref;
-    return (b.time || 0) - (a.time || 0);
-  });
-
-  // apply filter dropdown if set
-  const filter = $('filterLang').value;
-  const list = document.getElementById('feed');
-  list.innerHTML = '';
-  arr.forEach(post => {
-    if(filter !== 'all' && post.lang !== filter) return;
-    const div = document.createElement('div'); div.className='message';
-    const langLabel = `<span class="lang-pill">${escapeHtml(langName(post.lang))}</span>`;
-    const timeStr = post.time ? new Date(post.time).toLocaleString() : '';
-    const author = escapeHtml(post.authorName || post.authorPub || 'anonym');
-    div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${author}</strong> ${langLabel}</div><div class="muted">${timeStr}</div></div>
-      <div style="margin-top:0.4rem">${escapeHtml(post.text)}</div>
-      <div style="margin-top:0.6rem;display:flex;gap:0.5rem;align-items:center">
-        <button class="like-btn" data-id="${post.id}">❤ <span class="like-count" data-id="${post.id}">0</span></button>
-        <span class="muted">ID: ${escapeHtml(post.id)}</span>
-      </div>`;
-    list.appendChild(div);
-
-    // wire like button
-    const likeBtn = div.querySelector('.like-btn');
-    likeBtn.addEventListener('click', async ()=>{
-      if(!localUser) return alert('Melde dich an, um zu liken.');
-      // toggle using likes_by_post node
-      const myPub = localUser.pair.pub;
-      const node = gun.get('likes_by_post').get(post.id);
-      node.get(myPub).once(async (v,k)=>{
-        // v = true if currently liked
-        if(v){
-          node.get(myPub).put(null); // remove like
-        } else {
-          node.get(myPub).put(true);
-        }
-      });
-    });
-
-    // live update like count & button state
-    const countSpan = div.querySelector('.like-count');
-    const node = gun.get('likes_by_post').get(post.id);
-    // collect likes by map
-    const updateLikes = () => {
-      const s = new Set();
-      node.map().once((v,k)=>{
-        if(v) s.add(k);
-      });
-      setTimeout(()=>{ // small delay to collect
-        countSpan.textContent = s.size;
-        // highlight if current user liked
-        if(localUser && s.has(localUser.pair.pub)) likeBtn.classList.add('liked'); else likeBtn.classList.remove('liked');
-      }, 250);
-    };
-    // initial fetch + subscribe
-    updateLikes();
-    node.map().on(()=> updateLikes());
+  const node = likesNode.get(postId);
+  node.get(myPub).once((v,k)=>{
+    if(v){ node.get(myPub).put(null); } else { node.get(myPub).put(true); }
   });
 }
 
+// fetch likes count and whether current user liked
+function observeLikesForPost(postId, cb){
+  const node = likesNode.get(postId);
+  const update = () => {
+    const s = new Set();
+    node.map().once((v,k)=>{ if(v) s.add(k); });
+    setTimeout(()=> cb(Array.from(s)), 250);
+  };
+  node.map().on(()=> update());
+  update();
+}
+
+// -------------------- Feed rendering --------------------
 function langName(code){
   switch(code){
     case 'en': return 'EN';
@@ -366,81 +367,158 @@ function langName(code){
   }
 }
 
-// listen to filter changes (re-render)
-$('filterLang').addEventListener('change', ()=> renderAllPosts(localUser ? (localUser.lang || 'en') : 'en'));
+function renderFeed(){
+  // first, private inbox at top (if any)
+  if(inboxStore.length && localUser){
+    $('privateInboxArea').classList.remove('hidden');
+    const ib = $('privateInbox');
+    ib.innerHTML = '';
+    inboxStore.sort((a,b)=>b.time - a.time).forEach(m=>{
+      const div = document.createElement('div'); div.className='top-private';
+      div.innerHTML = `<div style="display:flex;justify-content:space-between"><strong>Privat von ${escapeHtml(m.from)}</strong><span class="muted">${new Date(m.time).toLocaleString()}</span></div>
+                       <div style="margin-top:0.4rem">${escapeHtml(m.text)}</div>`;
+      ib.appendChild(div);
+    });
+  } else {
+    $('privateInboxArea').classList.add('hidden');
+  }
 
-// subscribe to posts node (live)
+  // Build list of public posts (and non-public ones if relevant)
+  const arr = Object.values(postsStore);
+  // prefer user's language first
+  const pref = localUser ? (localUser.lang || 'en') : 'en';
+  arr.sort((a,b)=>{
+    const aPref = (a.lang === pref) ? 0 : 1;
+    const bPref = (b.lang === pref) ? 0 : 1;
+    if(aPref !== bPref) return aPref - bPref;
+    return (b.time || 0) - (a.time || 0);
+  });
+
+  const filter = $('filterLang').value;
+  const list = $('feed'); list.innerHTML = '';
+  arr.forEach(post=>{
+    // filter by selected filter
+    if(filter !== 'all' && post.lang !== filter) return;
+    // determine visibility: public posts always visible; private-labeled posts (public:false) only show to author or when recipient==user? We'll show public:true or if author==localUser
+    if(post.public === false && localUser){
+      // show only if author is localUser
+      if(post.authorPub !== (localUser.pair && localUser.pair.pub)) return;
+    } else if(post.public === false && !localUser) return;
+    if(post.public === undefined) post.public = true; // safety
+
+    const div = document.createElement('div'); div.className='message';
+    const langLabel = `<span class="lang-pill">${escapeHtml(langName(post.lang || 'en'))}</span>`;
+    const timeStr = post.time ? new Date(post.time).toLocaleString() : '';
+    const author = escapeHtml(post.authorName || post.authorPub || 'anonym');
+    const text = escapeHtml(post.text || '');
+    div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${author}</strong> ${langLabel}</div><div class="muted">${timeStr}</div></div>
+      <div style="margin-top:0.4rem">${text}</div>
+      <div style="margin-top:0.6rem;display:flex;gap:0.6rem;align-items:center">
+        <button class="like-btn" data-id="${post.id}">❤ <span class="like-count" data-id="${post.id}">0</span></button>
+        <span class="muted">ID: ${escapeHtml(post.id)}</span>
+      </div>`;
+    list.appendChild(div);
+
+    // wire like button
+    const likeBtn = div.querySelector('.like-btn');
+    likeBtn.addEventListener('click', ()=> toggleLike(post.id));
+
+    // live likes
+    const countSpan = div.querySelector('.like-count');
+    observeLikesForPost(post.id, (likesArray)=>{
+      countSpan.textContent = likesArray.length;
+      if(localUser && likesArray.includes(localUser.pair.pub)) likeBtn.classList.add('liked'); else likeBtn.classList.remove('liked');
+    });
+  });
+}
+
+// -------------------- Posts subscription --------------------
 postsNode.map().on((v,k)=>{
   if(!v) return;
-  // store by id
   postsStore[v.id || k] = v;
-  // re-render with priority
-  const preferred = localUser ? (localUser.lang || 'en') : 'en';
-  renderAllPosts(preferred);
+  renderFeed();
 });
 
-// -------------------- Private messages (E2E) --------------------
-async function resolveRecipient(identifier){
-  if(!identifier) return null;
-  // if looks like pub (rough heuristic)
-  if(identifier.length > 40 || identifier.indexOf('=')>-1) return identifier;
+// -------------------- Messages: send & receive --------------------
+$('btnLookup').addEventListener('click', async ()=>{
+  const id = $('quickLookup').value.trim();
+  const pub = await resolveRecipient(id);
+  if(pub) $('lookupResult').textContent = 'Resolved pub: ' + pub; else $('lookupResult').textContent = 'Nicht gefunden';
+});
+
+async function sendPrivate(toIdentifier, plainText){
+  if(!localUser) return alert('Bitte anmelden.');
+  const pubTo = await resolveRecipient(toIdentifier);
+  if(!pubTo) return alert('Empfänger nicht gefunden.');
+  const secret = await SEA.secret(pubTo, localUser.pair);
+  const cipher = await SEA.encrypt(plainText, secret);
+  const msg = { from: localUser.username, fromPub: localUser.pair.pub, payload: cipher, time: Date.now(), id: 'm' + Date.now() + Math.random().toString(36).slice(2,6) };
+  messagesNode.get(pubTo).set(msg);
+  return true;
+}
+
+// watch inbox for current user: decrypt and keep in inboxStore
+function watchInbox(){
+  inboxStore.length = 0; // clear
+  if(!localUser) return;
+  const myPub = localUser.pair.pub;
+  messagesNode.get(myPub).map().on(async (v,k)=>{
+    if(!v || !v.payload) return;
+    // attempt decrypt
+    try{
+      const secret = await SEA.secret(v.fromPub, localUser.pair);
+      const plain = await SEA.decrypt(v.payload, secret);
+      if(plain){
+        // dedupe by id
+        if(!inboxStore.find(x=>x.id===v.id)){
+          inboxStore.push({ id: v.id, from: v.from, fromPub: v.fromPub, text: plain, time: v.time || Date.now() });
+          renderFeed();
+        }
+      }
+    } catch(e){
+      console.error('decrypt error', e);
+    }
+  });
+}
+
+// call when identity loaded/created
+function identityLoadedActions(){
+  watchInbox();
+  renderFeed();
+}
+
+// attempt auto-load
+if(localStorage.getItem('openfeed_user')) loadIdentity() && identityLoadedActions();
+
+// ensure watchInbox starts after creating/loading
+// when user is created or loaded, we call watchInbox in those flows already
+
+// -------------------- Resolve recipient helper used by post & sendPrivate --------------------
+function resolveRecipient(identifier){
+  if(!identifier) return Promise.resolve(null);
+  if(identifier.length>40 || identifier.indexOf('=')>-1) return Promise.resolve(identifier);
   return new Promise(resolve => {
-    profilesNode.get(identifier).once((v)=>{
+    profilesNode.get(identifier).once(v=>{
       if(v && v.pub) resolve(v.pub); else resolve(null);
     });
   });
 }
 
-$('btnResolve').addEventListener('click', async ()=>{
-  const id = $('pmTo').value.trim();
-  const r = await resolveRecipient(id);
-  alert(r ? ('Found pub: ' + r) : 'Empfänger nicht gefunden.');
-});
+// -------------------- Incoming decrypted private messages for instant test on profile page (optional) --------------------
+setInterval(()=> {
+  // periodic render to reflect any new data
+  renderFeed();
+}, 2000);
 
-$('btnSendPM').addEventListener('click', async ()=>{
-  const to = $('pmTo').value.trim();
-  const text = $('pmText').value.trim();
-  if(!to || !text) return alert('Empfänger und Text benötigt.');
-  if(!localUser) return alert('Bitte erst identität laden/erstellen.');
-  const pubTo = await resolveRecipient(to);
-  if(!pubTo) return alert('Empfänger nicht gefunden.');
-  // compute shared secret and encrypt
-  const secret = await SEA.secret(pubTo, localUser.pair);
-  const cipher = await SEA.encrypt(text, secret);
-  messagesNode.get(pubTo).set({ from: localUser.username, fromPub: localUser.pair.pub, payload: cipher, time: Date.now() });
-  $('pmText').value='';
-  alert('Verschlüsselte Nachricht gesendet.');
-});
-
-// watch inbox: listen for messages under our pub
-function watchInbox(){
-  if(!localUser) return;
-  const myPub = localUser.pair.pub;
-  messagesNode.get(myPub).map().on(async (v,k)=>{
-    if(!v) return;
-    try{
-      const secret = await SEA.secret(v.fromPub, localUser.pair);
-      const plain = await SEA.decrypt(v.payload, secret);
-      if(plain) alert('Private Nachricht von ' + v.from + ':\\n' + plain);
-    } catch(e){ console.error('decrypt error', e); }
-  });
-}
-
-// call watchInbox when identity present
-if(localUser) watchInbox();
-
-// also periodically re-render to reflect current user's preference changes
-setInterval(()=> renderAllPosts(localUser ? (localUser.lang || 'en') : 'en'), 2000);
-
-// -------------------- Initialization: seed a default post if none --------------------
+// -------------------- Seed default post if empty for first-time experience ---
 (function seed(){
-  // only seed once per browser storage
   if(!localStorage.getItem('openfeed_seeded')){
     const id = 'seed' + Date.now();
-    postsNode.set({ id, authorName:'TxT_swiss', authorPub:null, text:'Welcome to OPENFEED — multilingual P2P prototype. Post language when posting!', lang:'en', time: Date.now() });
-    localStorage.setItem('openfeed_seeded', '1');
+    postsNode.set({ id, authorName:'TxT_swiss', authorPub:null, text:'Welcome to OPENFEED — multilingual P2P prototype. Use the "Posten" page to send public or private posts.', lang:'en', time: Date.now(), public:true });
+    localStorage.setItem('openfeed_seeded','1');
   }
 })();
+
 </script>
 </body>
 </html>
