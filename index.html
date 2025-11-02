@@ -1,230 +1,446 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>OPENFEED — Prototype</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;margin:0;background:#f6f8fa;color:#111}
-    header{background:#0b5fff;color:white;padding:1rem 1.25rem}
-    .container{max-width:980px;margin:1rem auto;padding:1rem;background:white;border-radius:8px;box-shadow:0 4px 16px rgba(11,95,255,0.08)}
-    .grid{display:grid;grid-template-columns:1fr 320px;gap:1rem}
-    input,textarea,select,button{font:inherit}
-    .card{padding:0.75rem;border:1px solid #e6e9ee;border-radius:6px}
-    .message{border-bottom:1px solid #eee;padding:0.5rem 0}
-    .muted{color:#6b7280;font-size:0.9rem}
-    .actions{display:flex;gap:0.5rem;flex-wrap:wrap}
-    .btn{background:#0b5fff;color:white;border:0;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer}
-    .btn.secondary{background:#f1f5f9;color:#0b5fff;border:1px solid #cfe0ff}
-    .small{font-size:0.85rem;padding:0.25rem 0.5rem}
-    footer{font-size:0.9rem;color:#6b7280;margin-top:1rem}
-    .danger{color:#b91c1c}
-  </style>
-  <!-- bcryptjs CDN for client-side hashing (prototype only) -->
-  <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>OPENFEED — P2P mit Likes & Sprache</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:#f7f8fb;color:#0b1220}
+  header{background:#0b5fff;color:white;padding:1rem}
+  .wrap{max-width:980px;margin:1rem auto;padding:1rem;background:white;border-radius:8px;box-shadow:0 6px 20px rgba(11,95,255,0.06)}
+  input,textarea,select,button{font:inherit}
+  .row{display:flex;gap:0.5rem}
+  .col{display:flex;flex-direction:column;gap:0.5rem}
+  .btn{background:#0b5fff;color:white;padding:0.5rem;border-radius:6px;border:0;cursor:pointer}
+  .btn.secondary{background:#eef4ff;color:#0b5fff;border:1px solid #cfe0ff;color:#0b5fff}
+  .muted{color:#6b7280;font-size:0.9rem}
+  .message{padding:0.6rem;border-bottom:1px solid #eee;border-radius:6px;margin-bottom:0.5rem;background:#fff}
+  .like-btn{background:none;border:1px solid #e6e9ee;padding:0.25rem 0.5rem;border-radius:6px;cursor:pointer}
+  .liked{background:#ffdce0;border-color:#ff9aa2}
+  .lang-pill{display:inline-block;padding:0.15rem 0.4rem;border-radius:4px;border:1px solid #e6e9ee;margin-left:0.4rem;font-size:0.8rem}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/gun/gun.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
 </head>
 <body>
-  <header>
-    <h1 style="margin:0">OPENFEED — Prototype</h1>
-    <div class="muted">Client-seitiges Demo: Profile exportieren als JSON (zum manuellen Upload auf GitHub). Siehe Hinweise unten.</div>
-  </header>
-
-  <div class="container">
-    <div class="grid">
-      <main>
-        <section class="card">
-          <h2>Anzeigen — Öffentliche Beiträge</h2>
-          <div id="publicFeed"></div>
-        </section>
-
-        <section class="card" style="margin-top:1rem">
-          <h2>Neuen Beitrag erstellen</h2>
-          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
-            <input id="postRecipient" placeholder="Empfänger ("all" für Öffentlich)" style="flex:1;padding:0.5rem" value="all">
-            <input id="postAuthor" placeholder="Ihr Profil-Name (eingeloggt ersetzt)" style="width:200px;padding:0.5rem">
+<header><h1 style="margin:0">OPENFEED — P2P (Likes & Sprache)</h1></header>
+<div class="wrap">
+  <div style="display:flex;gap:1rem">
+    <div style="flex:1">
+      <section style="margin-bottom:1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0">Feed</h3>
+          <div>
+            <label for="filterLang" class="muted">Filter:</label>
+            <select id="filterLang" style="padding:0.3rem">
+              <option value="all">All</option>
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+              <option value="fr">Français</option>
+              <option value="ja">日本語</option>
+              <option value="zh">中文</option>
+              <option value="es">Español</option>
+              <option value="ru">Русский</option>
+            </select>
           </div>
-          <textarea id="postText" rows="4" placeholder="Was möchtest du posten?" style="width:100%;padding:0.5rem"></textarea>
-          <div class="actions" style="margin-top:0.5rem">
-            <button class="btn" id="btnPost">Posten</button>
-            <button class="btn secondary" id="btnClear">Leeren</button>
-          </div>
-          <div id="postStatus" class="muted" style="margin-top:0.5rem"></div>
-        </section>
+        </div>
+        <div id="feed" class="col" style="margin-top:0.8rem"></div>
+      </section>
 
-      </main>
+      <section style="margin-bottom:1rem">
+        <h3>Neuen Beitrag erstellen</h3>
+        <textarea id="postText" rows="3" style="width:100%;padding:0.5rem"></textarea>
+        <div style="display:flex;gap:0.5rem;margin-top:0.5rem;align-items:center">
+          <label class="muted">Sprache:</label>
+          <select id="postLang" style="padding:0.3rem">
+            <option value="en">English (default)</option>
+            <option value="de">Deutsch</option>
+            <option value="fr">Français</option>
+            <option value="ja">日本語</option>
+            <option value="zh">中文</option>
+            <option value="es">Español</option>
+            <option value="ru">Русский</option>
+          </select>
+          <button class="btn" id="btnPost">Posten</button>
+          <button class="btn secondary" id="btnClear">Leeren</button>
+        </div>
+      </section>
 
-      <aside>
-        <section class="card">
-          <h3>Benutzer</h3>
-          <div id="userBox"></div>
-        </section>
-
-        <section class="card" style="margin-top:1rem">
-          <h3>Profile (lokal)</h3>
-          <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
-            <input id="newUser" placeholder="Benutzername" style="flex:1;padding:0.4rem">
-          </div>
-          <input id="newPwd" placeholder="Passwort" type="password" style="width:100%;padding:0.4rem;margin-top:0.4rem">
-          <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-            <button class="btn small" id="btnCreate">Profil erstellen</button>
-            <button class="btn secondary small" id="btnExport">Profil exportieren (JSON)</button>
-          </div>
-          <div style="margin-top:0.6rem">
-            <input id="loginUser" placeholder="Benutzername zum Einloggen" style="width:100%;padding:0.4rem">
-            <input id="loginPwd" placeholder="Passwort" type="password" style="width:100%;padding:0.4rem;margin-top:0.4rem">
-            <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-              <button class="btn small" id="btnLogin">Einloggen</button>
-              <button class="btn secondary small" id="btnLogout">Ausloggen</button>
-            </div>
-          </div>
-        </section>
-
-        <section class="card" style="margin-top:1rem">
-          <h4>Hinweise & GitHub</h4>
-          <p class="muted">Dieses Demo speichert Profile und Posts lokal (localStorage). Mit <strong>Profil exportieren</strong> erhältst du eine JSON-Datei, die du manuell in ein GitHub-Repo hochladen kannst (z. B. per Web-UI). Das Passwort wird clientseitig gehashed (bcrypt).</p>
-          <p class="danger"><strong>Sicherheitshinweis:</strong> Öffentliche Speicherung von Profil-JSON (auch mit Hash) ist riskant. Für echte Nutzung brauchst du einen sicheren Server, HTTPS, serverseitiges Hashing, und eine echte API mit Auth-Token.</p>
-        </section>
-
-      </aside>
+      <section>
+        <h3>Private Nachricht (verschlüsselt)</h3>
+        <div class="row">
+          <input id="pmTo" placeholder="Empfänger PublicKey oder username" style="flex:1;padding:0.5rem">
+          <button class="btn secondary" id="btnResolve">Resolve</button>
+        </div>
+        <textarea id="pmText" rows="3" style="width:100%;padding:0.5rem;margin-top:0.5rem"></textarea>
+        <div style="margin-top:0.5rem"><button class="btn" id="btnSendPM">Senden (verschlüsselt)</button></div>
+      </section>
     </div>
 
-    <footer>
-      <strong>OPENFEED (Prototype)</strong> — Client-seitige Demo. Wenn du möchtest, kann ich die App erweitern: z.B. GitHub-API-Upload (braucht Token, am besten serverseitig), oder ein kleines Node.js Backend, das sichere Speicherung übernimmt.
-    </footer>
+    <aside style="width:320px">
+      <section style="margin-bottom:1rem">
+        <h4>Profil & Sprache</h4>
+        <div id="profileBox" class="muted">Nicht eingeloggt</div>
+        <div style="margin-top:0.5rem">
+          <input id="userName" placeholder="Benutzername" style="width:100%;padding:0.4rem">
+          <input id="userPass" placeholder="Passphrase (optional)" style="width:100%;padding:0.4rem;margin-top:0.4rem">
+          <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+            <button class="btn" id="btnCreateUser">Erstelle Identität</button>
+            <button class="btn secondary" id="btnLoginUser">Lade Identität</button>
+          </div>
+
+          <div style="margin-top:0.6rem">
+            <label class="muted">Sprache bevorzugt: </label>
+            <select id="profileLang" style="width:100%;padding:0.4rem;margin-top:0.3rem">
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+              <option value="fr">Français</option>
+              <option value="ja">日本語</option>
+              <option value="zh">中文</option>
+              <option value="es">Español</option>
+              <option value="ru">Русский</option>
+            </select>
+            <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+              <button class="btn" id="btnSaveLang">Speichern</button>
+              <button class="btn secondary" id="btnExportProfile">Profil exportieren</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h4>Hinweise</h4>
+        <div class="muted">
+          - Du musst eingeloggt sein, um zu liken. Jeder User kann einen Post max. 1× liken (toggle erlaubt).<br>
+          - Posts haben eine Sprache; der Feed priorisiert deine bevorzugte Sprache.<br>
+          - Persistenz hängt von den genutzten öffentlichen Relays.
+        </div>
+      </section>
+    </aside>
   </div>
+</div>
 
 <script>
-// Simple client-side OPENFEED prototype
-// Data model (localStorage)
-// profiles: { username: { hashedPassword, createdAt }}
-// posts: [ {id, author, recipient, text, createdAt, public} ]
+/* P2P OPENFEED mit:
+   - Gun.js + SEA
+   - Likes: gun.get('post_likes').get(postId).set(pub)
+   - Posts: gun.get('openfeed_posts').set({id, authorName, authorPub, text, lang, time})
+   - Profiles: gun.get('openfeed_profiles').get(username).put({username, pub, lang})
+   - Local identity in localStorage 'openfeed_user'
+*/
 
-const LS_PROFILES = 'openfeed_profiles_v1';
-const LS_POSTS = 'openfeed_posts_v1';
+const gun = Gun({
+  peers: [
+    'https://gun-manhattan.herokuapp.com/gun',
+    'https://gun-us.herokuapp.com/gun'
+  ]
+});
+const postsNode = gun.get('openfeed_posts');
+const profilesNode = gun.get('openfeed_profiles');
+const likesNode = gun.get('post_likes');
+const messagesNode = gun.get('openfeed_messages');
 
-function loadProfiles(){
-  return JSON.parse(localStorage.getItem(LS_PROFILES) || '{}');
-}
-function saveProfiles(p){
-  localStorage.setItem(LS_PROFILES, JSON.stringify(p));
-}
-function loadPosts(){
-  return JSON.parse(localStorage.getItem(LS_POSTS) || '[]');
-}
-function savePosts(posts){
-  localStorage.setItem(LS_POSTS, JSON.stringify(posts));
-}
+const $ = id => document.getElementById(id);
+function escapeHtml(s){ if(!s) return ''; return s.toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;') }
 
-function uid(){return Math.random().toString(36).slice(2,9)}
+let localUser = null; // { username, pair }
 
-function renderPublicFeed(){
-  const posts = loadPosts().filter(p=>p.public).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-  const el = document.getElementById('publicFeed');
-  el.innerHTML = '';
-  if(!posts.length) el.innerHTML = '<div class="muted">Noch keine öffentlichen Beiträge.</div>';
-  posts.forEach(p=>{
-    const d = document.createElement('div'); d.className='message';
-    d.innerHTML = `<div style="display:flex;justify-content:space-between"><strong>${escapeHtml(p.author||'anonym')}</strong><span class="muted">${new Date(p.createdAt).toLocaleString()}</span></div><div style="margin-top:0.4rem">${escapeHtml(p.text)}</div>`;
-    el.appendChild(d);
-  })
-}
+// in-memory posts store for sorting/prioritization
+const postsStore = {}; // key => postObject
 
-function renderUserBox(){
-  const profiles = loadProfiles();
-  const box = document.getElementById('userBox');
-  const logged = sessionStorage.getItem('openfeed_logged') || null;
-  box.innerHTML = '';
-  if(logged){
-    box.innerHTML = `<div>Eingeloggt als <strong>${escapeHtml(logged)}</strong></div><div style="margin-top:0.5rem" class="muted">Du siehst jetzt private Nachrichten und kannst unter deinem Namen posten.</div>`;
-  } else {
-    box.innerHTML = '<div class="muted">Nicht eingeloggt — nur öffentliche Beiträge sichtbar</div>';
-  }
-  const keys = Object.keys(profiles);
-  if(keys.length){
-    const list = document.createElement('div'); list.style.marginTop='0.6rem';
-    list.innerHTML = '<strong>Bekannte Profile:</strong>';
-    keys.forEach(k=>{ const it = document.createElement('div'); it.className='muted'; it.textContent = k; list.appendChild(it);});
-    box.appendChild(list);
-  }
+// -------------------- Profile / Identity --------------------
+async function createIdentity(username, passphrase){
+  if(!username) return alert('Bitte Benutzernamen angeben.');
+  // create SEA pair; if passphrase given, use pair(passphrase) to derive (warning: passphrase must be strong)
+  const pair = passphrase ? await SEA.pair(passphrase) : await SEA.pair();
+  localUser = { username, pair };
+  localStorage.setItem('openfeed_user', JSON.stringify(localUser));
+  // default language in profile = English
+  const profile = { username, pub: pair.pub, lang: (document.getElementById('profileLang').value || 'en'), createdAt: new Date().toISOString() };
+  profilesNode.get(username).put(profile);
+  renderProfile(profile);
+  watchInbox();
+  alert('Identität erstellt. PublicKey:\\n' + pair.pub);
+  return profile;
 }
 
-function escapeHtml(s){ if(!s) return ''; return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;') }
+function loadIdentity(){
+  const raw = localStorage.getItem('openfeed_user');
+  if(!raw) return null;
+  try{
+    localUser = JSON.parse(raw);
+    // if stored as object with pair fields serialised, okay
+    const profile = { username: localUser.username, pub: localUser.pair.pub, lang: localUser.lang || 'en' };
+    renderProfile(profile);
+    // load saved preferred lang into selector
+    $('profileLang').value = profile.lang || 'en';
+    watchInbox();
+    return profile;
+  } catch(e){ console.error(e); return null; }
+}
 
-// Create profile -> hash with bcrypt
-document.getElementById('btnCreate').addEventListener('click', async ()=>{
-  const u = document.getElementById('newUser').value.trim();
-  const pw = document.getElementById('newPwd').value;
-  const status = document.getElementById('postStatus');
-  if(!u || !pw){ status.textContent='Benutzername und Passwort erforderlich.'; return; }
-  const profiles = loadProfiles();
-  if(profiles[u]){ status.textContent='Benutzername existiert bereits (lokal).'; return; }
-  status.textContent='Erstelle Profil...';
-  // bcrypt hash, 10 rounds
-  const salt = bcrypt.genSaltSync(10);
-  const hash = bcrypt.hashSync(pw, salt);
-  profiles[u] = { hashedPassword: hash, createdAt: new Date().toISOString() };
-  saveProfiles(profiles);
-  document.getElementById('newUser').value=''; document.getElementById('newPwd').value='';
-  status.textContent='Profil erstellt (lokal). Klicke "Profil exportieren" um JSON zu erhalten.';
-  renderUserBox();
+function renderProfile(profile){
+  $('profileBox').innerHTML = `<div><strong>${escapeHtml(profile.username)}</strong></div><div class="muted">PubKey: ${escapeHtml(profile.pub)}</div><div style="margin-top:0.4rem" class="muted">Bevorzugte Sprache: ${escapeHtml(profile.lang || 'en')}</div>`;
+}
+
+// save preferred language to profile in Gun and locally
+$('btnSaveLang').addEventListener('click', ()=>{
+  if(!localUser) return alert('Bitte zuerst Identität erstellen / laden.');
+  const lang = $('profileLang').value;
+  const profile = { username: localUser.username, pub: localUser.pair.pub, lang, updatedAt: new Date().toISOString() };
+  profilesNode.get(localUser.username).put(profile);
+  // also store locally
+  localUser.lang = lang;
+  localStorage.setItem('openfeed_user', JSON.stringify(localUser));
+  renderProfile(profile);
+  alert('Sprache gespeichert.');
 });
 
-// Export profile as JSON for manual upload to GitHub
-document.getElementById('btnExport').addEventListener('click', ()=>{
-  const name = prompt('Welches Profil exportieren? (Benutzername)');
-  if(!name) return;
-  const prof = loadProfiles()[name];
-  if(!prof){ alert('Profil nicht gefunden (lokal)'); return; }
-  const json = { username: name, hashedPassword: prof.hashedPassword, createdAt: prof.createdAt };
-  const blob = new Blob([JSON.stringify(json, null, 2)], {type:'application/json'});
+// export profile JSON (public fields only)
+$('btnExportProfile').addEventListener('click', ()=>{
+  if(!localUser) return alert('Keine Identität vorhanden.');
+  const out = { username: localUser.username, pub: localUser.pair.pub, lang: localUser.lang || 'en', createdAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `${name}.openfeed.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  const a = document.createElement('a'); a.href = url; a.download = `${out.username}.openfeed.profile.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 });
 
-// Login
-document.getElementById('btnLogin').addEventListener('click', ()=>{
-  const u = document.getElementById('loginUser').value.trim();
-  const pw = document.getElementById('loginPwd').value;
-  const profiles = loadProfiles();
-  const status = document.getElementById('postStatus');
-  if(!profiles[u]){ status.textContent='Profil nicht gefunden (lokal).'; return; }
-  const ok = bcrypt.compareSync(pw, profiles[u].hashedPassword);
-  if(ok){ sessionStorage.setItem('openfeed_logged', u); status.textContent='Eingeloggt.'; renderUserBox(); }
-  else { status.textContent='Passwort falsch.'; }
+// button handlers for create/load identity
+$('btnCreateUser').addEventListener('click', async ()=>{
+  const u = $('userName').value.trim();
+  const p = $('userPass').value || null;
+  await createIdentity(u, p);
+});
+$('btnLoginUser').addEventListener('click', ()=>{
+  const prof = loadIdentity();
+  if(!prof) alert('Keine lokale Identität gefunden. Erstelle zuerst eine Identität.');
+  else alert('Identität geladen: ' + prof.username);
 });
 
-// Logout
-document.getElementById('btnLogout').addEventListener('click', ()=>{
-  sessionStorage.removeItem('openfeed_logged'); document.getElementById('postStatus').textContent='Ausgeloggt.'; renderUserBox();
+// auto-load identity if present
+loadIdentity();
+
+// -------------------- Posting --------------------
+$('btnPost').addEventListener('click', ()=>{
+  const text = $('postText').value.trim();
+  if(!text) return alert('Bitte Text eingeben.');
+  const lang = $('postLang').value || 'en';
+  let authorName = 'anonym', authorPub = null;
+  if(localUser){ authorName = localUser.username; authorPub = localUser.pair.pub; }
+  // create a unique id (timestamp + random)
+  const id = 'p' + Date.now() + Math.random().toString(36).slice(2,8);
+  const obj = { id, authorName, authorPub, text, lang, time: Date.now() };
+  postsNode.set(obj);
+  $('postText').value = '';
+  alert('Post veröffentlicht.');
 });
 
-// Post
-document.getElementById('btnPost').addEventListener('click', ()=>{
-  const text = document.getElementById('postText').value.trim();
-  const recipient = document.getElementById('postRecipient').value.trim() || 'all';
-  const logged = sessionStorage.getItem('openfeed_logged');
-  const authorInput = document.getElementById('postAuthor').value.trim();
-  const author = logged || authorInput || 'anonym';
-  const status = document.getElementById('postStatus');
-  if(!text){ status.textContent='Text darf nicht leer sein.'; return; }
-  const posts = loadPosts();
-  const post = { id: uid(), author, recipient, text, createdAt: new Date().toISOString(), public: (recipient==='all') };
-  posts.push(post); savePosts(posts);
-  document.getElementById('postText').value=''; status.textContent='Gesendet.'; renderPublicFeed();
-});
+// Clear button
+$('btnClear').addEventListener('click', ()=> $('postText').value='');
 
-// Clear post
-document.getElementById('btnClear').addEventListener('click', ()=>{ document.getElementById('postText').value=''; });
-
-// Initial demo content
-if(!localStorage.getItem(LS_POSTS)){
-  savePosts([
-    { id:uid(), author:'TxT_swiss', recipient:'all', text:'Willkommen bei OPENFEED – öffentliches Testposting.', createdAt:new Date().toISOString(), public:true }
-  ]);
+// -------------------- Likes --------------------
+// like toggle: user can like only when logged in; each user's pub can only appear once per post
+async function toggleLike(post){
+  if(!localUser) return alert('Du musst eingeloggt sein, um zu liken.');
+  const myPub = localUser.pair.pub;
+  const likeSet = likesNode.get(post.id);
+  // check if already liked by scanning the set (once)
+  let already = false;
+  await new Promise(resolve => {
+    likeSet.map().once((v,k)=>{
+      if(!v) return;
+      if(v === myPub) already = true;
+    });
+    // small timeout to allow Gun to respond
+    setTimeout(resolve, 250);
+  });
+  if(!already){
+    likeSet.set(myPub);
+  } else {
+    // Gun doesn't have a direct delete from set easily; approach: write a tombstone: likes_removed.{postId}.{pub}=true
+    // Simpler approach: maintain likes as object keyed by pub: likesNode.get(post.id).get(pub).put(true) and count keys.
+    // We'll implement removal via a different structure: likes_by_post.{id}.{pub} = true/false
+    // For compatibility, here implement removal by writing a negative mark:
+    likesNode.get(post.id + '_removed').get(myPub).put(true);
+  }
 }
 
-renderPublicFeed(); renderUserBox();
+// improved like model: likes_by_post.{postId}.{pub} = true if liked; if false/undefined => not liked
+// We'll write likes both ways for compatibility when toggling
+async function setLikeBool(post, value){
+  if(!localUser) return alert('Bitte einloggen.');
+  const myPub = localUser.pair.pub;
+  const node = gun.get('likes_by_post').get(post.id);
+  node.get(myPub).put(value ? true : null); // putting null should remove
+}
 
+// helper to count likes and check current user liked
+function fetchLikesForPost(post, cb){
+  const node = gun.get('likes_by_post').get(post.id);
+  const likes = new Set();
+  node.map().once((v,k)=>{
+    if(v) likes.add(k);
+  });
+  // small timeout to collect values
+  setTimeout(()=> cb(Array.from(likes)), 300);
+}
+
+// -------------------- Rendering feed --------------------
+function renderAllPosts(userPrefLang){
+  // convert postsStore to array
+  const arr = Object.values(postsStore);
+  // sort: prefer posts with lang === userPrefLang first, then others; inside each group sort by time desc
+  arr.sort((a,b)=>{
+    const aPref = (a.lang === userPrefLang) ? 0 : 1;
+    const bPref = (b.lang === userPrefLang) ? 0 : 1;
+    if(aPref !== bPref) return aPref - bPref;
+    return (b.time || 0) - (a.time || 0);
+  });
+
+  // apply filter dropdown if set
+  const filter = $('filterLang').value;
+  const list = document.getElementById('feed');
+  list.innerHTML = '';
+  arr.forEach(post => {
+    if(filter !== 'all' && post.lang !== filter) return;
+    const div = document.createElement('div'); div.className='message';
+    const langLabel = `<span class="lang-pill">${escapeHtml(langName(post.lang))}</span>`;
+    const timeStr = post.time ? new Date(post.time).toLocaleString() : '';
+    const author = escapeHtml(post.authorName || post.authorPub || 'anonym');
+    div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${author}</strong> ${langLabel}</div><div class="muted">${timeStr}</div></div>
+      <div style="margin-top:0.4rem">${escapeHtml(post.text)}</div>
+      <div style="margin-top:0.6rem;display:flex;gap:0.5rem;align-items:center">
+        <button class="like-btn" data-id="${post.id}">❤ <span class="like-count" data-id="${post.id}">0</span></button>
+        <span class="muted">ID: ${escapeHtml(post.id)}</span>
+      </div>`;
+    list.appendChild(div);
+
+    // wire like button
+    const likeBtn = div.querySelector('.like-btn');
+    likeBtn.addEventListener('click', async ()=>{
+      if(!localUser) return alert('Melde dich an, um zu liken.');
+      // toggle using likes_by_post node
+      const myPub = localUser.pair.pub;
+      const node = gun.get('likes_by_post').get(post.id);
+      node.get(myPub).once(async (v,k)=>{
+        // v = true if currently liked
+        if(v){
+          node.get(myPub).put(null); // remove like
+        } else {
+          node.get(myPub).put(true);
+        }
+      });
+    });
+
+    // live update like count & button state
+    const countSpan = div.querySelector('.like-count');
+    const node = gun.get('likes_by_post').get(post.id);
+    // collect likes by map
+    const updateLikes = () => {
+      const s = new Set();
+      node.map().once((v,k)=>{
+        if(v) s.add(k);
+      });
+      setTimeout(()=>{ // small delay to collect
+        countSpan.textContent = s.size;
+        // highlight if current user liked
+        if(localUser && s.has(localUser.pair.pub)) likeBtn.classList.add('liked'); else likeBtn.classList.remove('liked');
+      }, 250);
+    };
+    // initial fetch + subscribe
+    updateLikes();
+    node.map().on(()=> updateLikes());
+  });
+}
+
+function langName(code){
+  switch(code){
+    case 'en': return 'EN';
+    case 'de': return 'DE';
+    case 'fr': return 'FR';
+    case 'ja': return 'JP';
+    case 'zh': return 'ZH';
+    case 'es': return 'ES';
+    case 'ru': return 'RU';
+    default: return code;
+  }
+}
+
+// listen to filter changes (re-render)
+$('filterLang').addEventListener('change', ()=> renderAllPosts(localUser ? (localUser.lang || 'en') : 'en'));
+
+// subscribe to posts node (live)
+postsNode.map().on((v,k)=>{
+  if(!v) return;
+  // store by id
+  postsStore[v.id || k] = v;
+  // re-render with priority
+  const preferred = localUser ? (localUser.lang || 'en') : 'en';
+  renderAllPosts(preferred);
+});
+
+// -------------------- Private messages (E2E) --------------------
+async function resolveRecipient(identifier){
+  if(!identifier) return null;
+  // if looks like pub (rough heuristic)
+  if(identifier.length > 40 || identifier.indexOf('=')>-1) return identifier;
+  return new Promise(resolve => {
+    profilesNode.get(identifier).once((v)=>{
+      if(v && v.pub) resolve(v.pub); else resolve(null);
+    });
+  });
+}
+
+$('btnResolve').addEventListener('click', async ()=>{
+  const id = $('pmTo').value.trim();
+  const r = await resolveRecipient(id);
+  alert(r ? ('Found pub: ' + r) : 'Empfänger nicht gefunden.');
+});
+
+$('btnSendPM').addEventListener('click', async ()=>{
+  const to = $('pmTo').value.trim();
+  const text = $('pmText').value.trim();
+  if(!to || !text) return alert('Empfänger und Text benötigt.');
+  if(!localUser) return alert('Bitte erst identität laden/erstellen.');
+  const pubTo = await resolveRecipient(to);
+  if(!pubTo) return alert('Empfänger nicht gefunden.');
+  // compute shared secret and encrypt
+  const secret = await SEA.secret(pubTo, localUser.pair);
+  const cipher = await SEA.encrypt(text, secret);
+  messagesNode.get(pubTo).set({ from: localUser.username, fromPub: localUser.pair.pub, payload: cipher, time: Date.now() });
+  $('pmText').value='';
+  alert('Verschlüsselte Nachricht gesendet.');
+});
+
+// watch inbox: listen for messages under our pub
+function watchInbox(){
+  if(!localUser) return;
+  const myPub = localUser.pair.pub;
+  messagesNode.get(myPub).map().on(async (v,k)=>{
+    if(!v) return;
+    try{
+      const secret = await SEA.secret(v.fromPub, localUser.pair);
+      const plain = await SEA.decrypt(v.payload, secret);
+      if(plain) alert('Private Nachricht von ' + v.from + ':\\n' + plain);
+    } catch(e){ console.error('decrypt error', e); }
+  });
+}
+
+// call watchInbox when identity present
+if(localUser) watchInbox();
+
+// also periodically re-render to reflect current user's preference changes
+setInterval(()=> renderAllPosts(localUser ? (localUser.lang || 'en') : 'en'), 2000);
+
+// -------------------- Initialization: seed a default post if none --------------------
+(function seed(){
+  // only seed once per browser storage
+  if(!localStorage.getItem('openfeed_seeded')){
+    const id = 'seed' + Date.now();
+    postsNode.set({ id, authorName:'TxT_swiss', authorPub:null, text:'Welcome to OPENFEED — multilingual P2P prototype. Post language when posting!', lang:'en', time: Date.now() });
+    localStorage.setItem('openfeed_seeded', '1');
+  }
+})();
 </script>
 </body>
 </html>
