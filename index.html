@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>OPENFEED — P2P Fixed (Feed / Profil / Posten)</title>
+<title>OPENFEED — P2P</title>
 <style>
   :root{--brand:#0b5fff;--muted:#6b7280}
   body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:#f7f8fb;color:#0b1220;min-height:100vh;display:flex;flex-direction:column}
   header{background:var(--brand);color:white;padding:0.9rem 1rem;position:sticky;top:0;z-index:20}
-  .container{max-width:1000px;margin:1rem auto;padding:1rem;background:white;border-radius:10px;box-shadow:0 8px 30px rgba(11,95,255,0.06);flex:1}
+  .container{max-width:1000px;margin:1rem auto;padding:1rem;background:white;border-radius:10px;box-shadow:0 8px 30px rgba(11,95,255,0.06);flex:1;max-height:calc(100vh - 140px);overflow:auto}
   .grid{display:grid;grid-template-columns:1fr 320px;gap:1rem}
   input,textarea,select,button{font:inherit}
   .muted{color:var(--muted);font-size:0.9rem}
@@ -28,13 +28,16 @@
   .toast.success{background:#119a4b}
   .toast.warn{background:#ff8c42}
   .toast.err{background:#b91c1c}
+  .file-list{max-height:180px;overflow:auto;border:1px solid #eee;padding:6px;border-radius:6px;background:#fafafa}
+  .file-item{padding:6px;border-bottom:1px solid #eee;cursor:pointer}
+  .file-item:hover{background:#eef4ff}
   @media (max-width:900px){ .grid{grid-template-columns:1fr} aside{order:2} }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/gun/gun.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
 </head>
 <body>
-<header><h1 style="margin:0">OPENFEED — P2P (Fixed)</h1></header>
+<header><h1 style="margin:0">OPENFEED — P2P</h1></header>
 
 <div class="container">
   <!-- FEED PAGE -->
@@ -74,7 +77,8 @@
           <div class="muted">
             - Navigation unten: Feed / Profil / Posten.<br>
             - Private Nachrichten (E2E) erscheinen oben im Feed nur für dich.<br>
-            - Likes & Sprache bleiben aktiv.
+            - Likes & Sprache bleiben aktiv.<br>
+            - Custom-Algorithmus: lege eine JS-Datei in dein GitHub-Repo (siehe Profil → GitHub-Algorithmen).
           </div>
         </section>
 
@@ -123,14 +127,47 @@
             <button class="btn ghost" id="btnExportProfile">Profil exportieren</button>
           </div>
         </section>
+
+        <section style="margin-top:1rem">
+          <h4>GitHub: Algorithmus laden (öffentliche Repo)</h4>
+          <div class="muted">Gib Repo-Details ein (standardmäßig auf dein Pages-Repo gesetzt). Du kannst dann Dateien im Repo browsen und eine Algorithmus-JS-Datei laden.</div>
+          <div style="margin-top:0.5rem;display:flex;gap:0.5rem">
+            <input id="ghOwner" placeholder="Owner" value="OPXN-FXXD" style="padding:0.4rem">
+            <input id="ghRepo" placeholder="Repo" value="OPXN-FXXD.github.io" style="padding:0.4rem">
+            <input id="ghBranch" placeholder="Branch" value="main" style="padding:0.4rem;width:100px">
+          </div>
+          <div style="margin-top:0.5rem;display:flex;gap:0.5rem">
+            <input id="ghPath" placeholder="Pfad (z. B. algos/)" style="padding:0.4rem">
+            <button class="btn ghost" id="btnListFiles">List files</button>
+          </div>
+          <div class="file-list" id="ghFileList" style="margin-top:0.6rem"></div>
+          <div style="margin-top:0.6rem;display:flex;gap:0.5rem">
+            <button class="btn" id="btnLoadSelected">Load selected algorithm</button>
+            <button class="btn ghost" id="btnClearAlgo">Clear algorithm</button>
+          </div>
+          <div id="ghStatus" class="muted" style="margin-top:0.4rem"></div>
+        </section>
+
+        <section style="margin-top:1rem">
+          <h4>Custom Algorithm (Editor)</h4>
+          <label class="muted">Du kannst auch einen Algorithmus hier editieren oder testen (wird im Worker ausgeführt)</label>
+          <textarea id="customAlgo" rows="6" style="width:100%;padding:0.4rem;margin-top:0.4rem" placeholder="// function score(post, user, utils) { return ... }"></textarea>
+          <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+            <button class="btn ghost" id="btnSaveCustom">Save & Activate</button>
+            <button class="btn ghost" id="btnTestCustom">Test on sample</button>
+          </div>
+          <div id="customAlgoStatus" class="muted" style="margin-top:0.4rem"></div>
+        </section>
+
       </main>
 
       <aside>
         <section>
           <h4>Hinweise</h4>
           <div class="muted">
-            - Private keys bleiben lokal (localStorage). Sichere sie offline.<br>
-            - Veröffentliche nur public profile-json (kein privater Key).
+            - GitHub Lesezugriff funktioniert nur für öffentliche Repos ohne Token.<br>
+            - Die geladene Datei sollte eine JS-Funktion enthalten, die einen numerischen Score zurückgibt (siehe Beispiele).<br>
+            - Execution läuft im Web Worker mit Timeout (sicherer als direktes eval).
           </div>
         </section>
       </aside>
@@ -184,20 +221,16 @@
 <div class="toast-wrap" id="toasts"></div>
 
 <script>
-/* OPENFEED P2P — Fixed single-file SPA
-   Fixes included:
-   - Use deterministic keys for posts/messages (postsNode.get(id).put(...)) so map().on reliably sees them
-   - Store private messages as keyed objects (messagesNode.get(pub).get(msgId).put(msg))
-   - Proper awaits for SEA.secret + SEA.encrypt + SEA.decrypt
-   - Replace alert() with non-blocking toasts
-   - Minor robustness improvements for identity load/store
+/* OPENFEED P2P — with GitHub algo loader
+   - Fetches directory listings via GitHub API (public repos)
+   - Loads raw files via raw.githubusercontent.com
+   - Runs loaded algorithm code in Web Worker sandbox with timeout per scoring
+   - Safe defaults and fallbacks present
 */
 
 // -------------------- Utilities --------------------
 const $ = id => document.getElementById(id);
 function escapeHtml(s){ if(!s) return ''; return s.toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;') }
-
-// simple toast system
 function showToast(msg, kind='info', ttl=4000){
   const wrap = $('toasts');
   const el = document.createElement('div');
@@ -208,16 +241,13 @@ function showToast(msg, kind='info', ttl=4000){
 }
 
 // -------------------- Gun setup --------------------
-// public relays — try several (public relays are flaky; add more if needed)
 const gun = Gun({
   peers: [
     'https://gun-manhattan.herokuapp.com/gun',
     'https://gun-us.herokuapp.com/gun',
     'https://gun-eu.herokuapp.com/gun'
   ],
-  // localStorage: true // default
 });
-
 const postsNode = gun.get('openfeed_posts');
 const profilesNode = gun.get('openfeed_profiles');
 const likesNode = gun.get('likes_by_post');
@@ -249,7 +279,6 @@ async function createIdentity(username, passphrase){
   if(!username){ showToast('Benutzername benötigt', 'warn'); return; }
   const pair = passphrase ? await SEA.pair(passphrase) : await SEA.pair();
   localUser = { username, pair, lang: $('profileLang').value || 'en' };
-  // store pair as plain object (SEA pair is JSON-serializable)
   try { localStorage.setItem('openfeed_user', JSON.stringify(localUser)); } catch(e){ console.error(e); }
   const profile = { username, pub: pair.pub, lang: localUser.lang, createdAt: new Date().toISOString() };
   profilesNode.get(username).put(profile);
@@ -264,7 +293,6 @@ function loadIdentity(){
   if(!raw) return null;
   try{
     const parsed = JSON.parse(raw);
-    // ensure shape: parsed.pair should exist
     if(!parsed.pair || !parsed.pair.pub){ showToast('Lokale Identität ungültig', 'err'); return null; }
     localUser = parsed;
     $('profileLang').value = localUser.lang || 'en';
@@ -272,9 +300,7 @@ function loadIdentity(){
     watchInbox();
     showToast('Identität geladen', 'info');
     return localUser;
-  } catch(e){
-    console.error(e); showToast('Fehler beim Laden der Identität', 'err'); return null;
-  }
+  } catch(e){ console.error(e); showToast('Fehler beim Laden der Identität', 'err'); return null; }
 }
 
 function renderProfile(profile){
@@ -319,7 +345,7 @@ $('btnLookup').addEventListener('click', ()=>{
   });
 });
 
-// -------------------- Posting (public & private) --------------------
+// -------------------- Posting --------------------
 $('btnPublish').addEventListener('click', async ()=>{
   const text = $('postText').value.trim(); if(!text) return showToast('Bitte Text eingeben', 'warn');
   const lang = $('postLang').value || 'en';
@@ -331,11 +357,9 @@ $('btnPublish').addEventListener('click', async ()=>{
 
   if(recipient === 'all' || recipient === '') {
     const obj = Object.assign({}, base, { text, recipient:'all', public:true });
-    // store under deterministic key so map().on picks it up reliably
     postsNode.get(id).put(obj);
     showToast('Öffentlicher Post veröffentlicht', 'success');
   } else {
-    // resolve recipient to pub
     const pub = await resolveRecipient(recipient);
     if(pub){
       if(!localUser) return showToast('Nur eingeloggte Nutzer können private verschlüsselte Posts senden', 'warn');
@@ -343,12 +367,10 @@ $('btnPublish').addEventListener('click', async ()=>{
         const secret = await SEA.secret(pub, localUser.pair);
         const cipher = await SEA.encrypt(text, secret);
         const msg = { id: 'm' + Date.now() + Math.random().toString(36).slice(2,6), from: localUser.username, fromPub: localUser.pair.pub, payload: cipher, time: Date.now() };
-        // deterministic key for message
         messagesNode.get(pub).get(msg.id).put(msg);
         showToast('Verschlüsselte Nachricht gesendet', 'success');
       } catch(e){ console.error(e); showToast('Fehler beim Verschlüsseln', 'err'); }
     } else {
-      // fallback: private-labeled post stored locally on chain (non-E2E)
       const obj = Object.assign({}, base, { text, recipient, public:false });
       postsNode.get(id).put(obj);
       showToast('Post erstellt (Privat-Label) — Empfänger nicht aufgelöst; kein E2E', 'warn');
@@ -357,12 +379,11 @@ $('btnPublish').addEventListener('click', async ()=>{
   $('postText').value=''; $('postRecipient').value='';
 });
 
-// -------------------- Likes system --------------------
+// -------------------- Likes --------------------
 async function toggleLike(postId){
   if(!localUser) return showToast('Bitte einloggen um zu liken', 'warn');
   const myPub = localUser.pair.pub;
   const node = likesNode.get(postId);
-  // read once
   node.get(myPub).once((v,k)=>{
     if(v){ node.get(myPub).put(null); showToast('Like entfernt', 'info'); }
     else { node.get(myPub).put(true); showToast('Gefällt mir', 'success'); }
@@ -380,7 +401,7 @@ function observeLikesForPost(postId, cb){
   update();
 }
 
-// -------------------- Feed rendering --------------------
+// -------------------- Feed rendering & ranking --------------------
 function langName(code){
   switch(code){
     case 'en': return 'EN';
@@ -394,75 +415,223 @@ function langName(code){
   }
 }
 
-function renderFeed(){
-  // private inbox at top
-  if(inboxStore.length && localUser){
-    $('privateInboxArea').classList.remove('hidden');
-    const ib = $('privateInbox'); ib.innerHTML = '';
-    inboxStore.sort((a,b)=>b.time - a.time).forEach(m=>{
-      const div = document.createElement('div'); div.className='top-private';
-      div.innerHTML = `<div style="display:flex;justify-content:space-between"><strong>Privat von ${escapeHtml(m.from)}</strong><span class="muted">${new Date(m.time).toLocaleString()}</span></div>
-                       <div style="margin-top:0.4rem">${escapeHtml(m.text)}</div>`;
-      ib.appendChild(div);
-    });
-  } else {
-    $('privateInboxArea').classList.add('hidden');
+// Simple weight-based algorithm (default)
+function loadWeights(){
+  try{ return JSON.parse(localStorage.getItem('openfeed_weights')) || { lang:1.0, recency:1.0, likes:1.0 }; } catch(e){ return { lang:1.0, recency:1.0, likes:1.0 }; }
+}
+function computeScoreDefault(post, user){
+  const w = loadWeights();
+  const langScore = (post.lang === (user && user.lang ? user.lang : 'en')) ? 1 : 0;
+  const ageSec = (Date.now() - (post.time || Date.now())) / 1000;
+  const recencyScore = Math.max(0, 1 - ageSec / (60*60*24));
+  const likeCount = post._likeCount || 0;
+  return w.lang * langScore + w.recency * recencyScore + w.likes * Math.log(1 + likeCount);
+}
+
+// -------------------- Custom algorithm via GitHub or editor --------------------
+// Worker management
+let algoWorker = null;
+let algoCodeRaw = null; // code string loaded (from GitHub or textarea)
+const WORKER_TIMEOUT_MS = 250; // per post scoring timeout
+const MAX_POSTS_FOR_CUSTOM = 200; // cap scoring per render for custom algos
+
+function createAlgoWorkerFromCode(codeStr){
+  // codeStr should be function body or a function definition that returns score
+  // We'll build worker that on 'score' message executes user function safely
+  const workerSrc = `
+    self.onmessage = function(ev){
+      const data = ev.data;
+      if(!data || data.cmd !== 'score') return;
+      try {
+        // userFuncSource is passed as string in data (but we saved it during creation too)
+        // We'll create function as: const scoreFn = new Function('post','user','utils', userFuncSource);
+        const fnSource = ${JSON.stringify(codeStr)};
+        const scoreFn = new Function('post','user','utils', fnSource);
+        // create safe utils
+        const utils = {
+          likes: function(p){ return (p._likeCount || 0); },
+          ageSec: function(p){ return ((Date.now() - (p.time||Date.now()))/1000); },
+          langMatch: function(p,u){ return (p.lang === (u && u.lang ? u.lang : 'en') ? 1 : 0); }
+        };
+        const score = scoreFn(data.post, data.user, utils);
+        self.postMessage({ ok: true, score: Number(score) || 0 });
+      } catch(e){
+        self.postMessage({ ok: false, error: String(e) });
+      }
+    };
+  `;
+  const blob = new Blob([workerSrc], { type: 'text/javascript' });
+  const worker = new Worker(URL.createObjectURL(blob));
+  return worker;
+}
+
+async function computeScoresWithWorker(posts){
+  if(!algoCodeRaw) return posts.map(p => ({ id: p.id, score: computeScoreDefault(p, localUser) }));
+  if(!algoWorker) algoWorker = createAlgoWorkerFromCode(algoCodeRaw);
+  const limited = posts.slice(0, MAX_POSTS_FOR_CUSTOM);
+  // compute in parallel with promises
+  const promises = limited.map(p => new Promise(resolve => {
+    let done = false;
+    const onmsg = (ev) => {
+      done = true;
+      algoWorker.removeEventListener('message', onmsg);
+      resolve({ id: p.id, score: ev.data && ev.data.ok ? ev.data.score : -99999 });
+    };
+    algoWorker.addEventListener('message', onmsg);
+    // send post & user (simple snapshot)
+    try{
+      algoWorker.postMessage({ cmd:'score', post: { id:p.id, lang:p.lang, time:p.time, _likeCount:p._likeCount||0, text: p.text }, user: { username: localUser ? localUser.username : null, lang: localUser ? localUser.lang : 'en' } });
+    } catch(e){
+      algoWorker.removeEventListener('message', onmsg);
+      resolve({ id: p.id, score: -99999 });
+    }
+    // timeout fallback
+    setTimeout(()=>{ if(!done){ algoWorker.removeEventListener('message', onmsg); resolve({ id: p.id, score: -99999 }); } }, WORKER_TIMEOUT_MS);
+  }));
+  const res = await Promise.all(promises);
+  // fill defaults for remaining posts (if any)
+  if(posts.length > limited.length){
+    const rest = posts.slice(limited.length).map(p => ({ id: p.id, score: computeScoreDefault(p, localUser) }));
+    return res.concat(rest);
   }
+  return res;
+}
 
-  const arr = Object.values(postsStore);
-  const pref = localUser ? (localUser.lang || 'en') : 'en';
-  arr.sort((a,b)=>{
-    const aPref = (a.lang === pref) ? 0 : 1;
-    const bPref = (b.lang === pref) ? 0 : 1;
-    if(aPref !== bPref) return aPref - bPref;
-    return (b.time || 0) - (a.time || 0);
-  });
+// Save / clear custom algorithm (raw code)
+function saveCustomAlgo(code){
+  algoCodeRaw = code;
+  localStorage.setItem('openfeed_algo', code);
+  if(algoWorker){ try{ algoWorker.terminate(); }catch(e){} algoWorker = null; }
+}
+function clearCustomAlgo(){
+  algoCodeRaw = null;
+  localStorage.removeItem('openfeed_algo');
+  if(algoWorker){ algoWorker.terminate(); algoWorker = null; }
+  showToast('Custom algorithm cleared', 'info');
+}
+function loadCustomAlgoFromStorage(){
+  try{ const c = localStorage.getItem('openfeed_algo'); if(c) { algoCodeRaw = c; return c; } } catch(e){} return null;
+}
 
-  const filter = $('filterLang').value;
-  const list = $('feed'); list.innerHTML = '';
-  arr.forEach(post=>{
-    if(filter !== 'all' && post.lang !== filter) return;
-    // visibility check
-    if(post.public === false && localUser){
-      if(post.authorPub !== (localUser.pair && localUser.pair.pub)) return;
-    } else if(post.public === false && !localUser) return;
+// Editor button handlers
+$('btnSaveCustom').addEventListener('click', ()=>{
+  const code = $('customAlgo').value.trim();
+  if(!code) return showToast('Kein Algorithmus eingegeben', 'warn');
+  saveCustomAlgo(code);
+  showToast('Custom algorithm saved (will be used for ranking)', 'success');
+});
+$('btnTestCustom').addEventListener('click', async ()=>{
+  const code = $('customAlgo').value.trim();
+  if(!code) return showToast('Kein Code zum Testen', 'warn');
+  // try instantiate worker and run on small sample
+  const worker = createAlgoWorkerFromCode(code);
+  const samplePost = { id:'s1', lang:'en', time: Date.now(), _likeCount: 3, text:'Hello' };
+  let ok = false;
+  const onmsg = (ev) => {
+    ok = ev.data && ev.data.ok;
+    worker.terminate();
+    showToast(ok ? ('Test OK — score=' + ev.data.score) : ('Test failed: ' + (ev.data.error||'unknown')), ok ? 'success' : 'err', 5000);
+  };
+  worker.addEventListener('message', onmsg);
+  worker.postMessage({ cmd:'score', post: samplePost, user: { username: localUser ? localUser.username : null, lang: localUser ? localUser.lang : 'en' } });
+  setTimeout(()=>{ if(!ok){ try{ worker.terminate(); }catch(e){} showToast('Test timeout or error', 'err'); } }, WORKER_TIMEOUT_MS + 50);
+});
 
-    const div = document.createElement('div'); div.className='message';
-    const langLabel = `<span class="lang-pill">${escapeHtml(langName(post.lang || 'en'))}</span>`;
-    const timeStr = post.time ? new Date(post.time).toLocaleString() : '';
-    const author = escapeHtml(post.authorName || post.authorPub || 'anonym');
-    const text = escapeHtml(post.text || '');
-    div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${author}</strong> ${langLabel}</div><div class="muted">${timeStr}</div></div>
-      <div style="margin-top:0.4rem">${text}</div>
-      <div style="margin-top:0.6rem;display:flex;gap:0.6rem;align-items:center">
-        <button class="like-btn" data-id="${post.id}">❤ <span class="like-count" data-id="${post.id}">0</span></button>
-        <span class="muted">ID: ${escapeHtml(post.id)}</span>
-      </div>`;
-    list.appendChild(div);
+// try load existing algorithm on startup
+loadCustomAlgoFromStorage();
+if(algoCodeRaw){ $('customAlgo').value = algoCodeRaw; showToast('Custom algorithm loaded from storage', 'info'); }
 
-    const likeBtn = div.querySelector('.like-btn');
-    likeBtn.addEventListener('click', ()=> toggleLike(post.id));
+// -------------------- GitHub: list files & load selected --------------------
+async function githubListContents(owner, repo, path='', branch='main'){
+  // GitHub API: GET /repos/{owner}/{repo}/contents/{path}?ref={branch}
+  const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`;
+  try{
+    const resp = await fetch(apiUrl);
+    if(!resp.ok) throw new Error('GitHub API error: ' + resp.status);
+    const json = await resp.json();
+    // json is array for directory, object for file
+    return json;
+  } catch(e){
+    throw e;
+  }
+}
 
-    const countSpan = div.querySelector('.like-count');
-    observeLikesForPost(post.id, (likesArray)=>{
-      countSpan.textContent = likesArray.length;
-      if(localUser && likesArray.includes(localUser.pair.pub)) likeBtn.classList.add('liked'); else likeBtn.classList.remove('liked');
+function renderFileList(items){
+  const list = $('ghFileList');
+  list.innerHTML = '';
+  if(!Array.isArray(items) || items.length===0){ list.innerHTML = '<div class="muted">Keine Dateien gefunden</div>'; return; }
+  items.forEach(it=>{
+    const div = document.createElement('div'); div.className='file-item';
+    div.textContent = it.path || it.name;
+    div.dataset.path = it.path || it.name;
+    div.dataset.type = it.type || 'file';
+    div.addEventListener('click', ()=> {
+      // mark selected
+      list.querySelectorAll('.file-item').forEach(x=>x.style.background='');
+      div.style.background = '#e6f0ff';
+      list.dataset.selected = div.dataset.path;
     });
+    list.appendChild(div);
   });
 }
 
-// -------------------- Posts subscription (robust) --------------------
-// listen for keyed posts (postsNode.get(id).put(...)) AND set() for backward compatibility
-postsNode.map().on((v,k)=>{
-  if(!v) return;
-  // If a set entry shows up it may have no id; ensure we have id
-  const key = v.id || k;
-  postsStore[key] = v;
-  renderFeed();
+// List files button
+$('btnListFiles').addEventListener('click', async ()=>{
+  const owner = $('ghOwner').value.trim();
+  const repo = $('ghRepo').value.trim();
+  const branch = $('ghBranch').value.trim() || 'main';
+  const path = $('ghPath').value.trim().replace(/^\/+/,'').replace(/\/+$/,''); // normalize
+  if(!owner || !repo) return showToast('Owner und Repo angeben', 'warn');
+  $('ghStatus').textContent = 'Listing...';
+  try{
+    const result = await githubListContents(owner, repo, path || '', branch);
+    // normalize to array
+    const arr = Array.isArray(result) ? result : [result];
+    // keep only JS files and directories
+    const filtered = arr.filter(i => i.type === 'file' && (i.name.endsWith('.js') || i.name.endsWith('.mjs') || i.name.endsWith('.txt') || i.name.endsWith('.algo')) || i.type==='dir');
+    renderFileList(filtered);
+    $('ghStatus').textContent = 'Select a file to load (JS function expected)';
+  } catch(e){
+    console.error(e);
+    showToast('Fehler beim Listen: ' + e.message, 'err', 6000);
+    $('ghStatus').textContent = 'Fehler: ' + e.message;
+  }
 });
 
-// also catch posts added under set() (older clients) by reading set directly (best-effort)
-postsNode.once(async (snap) => { /* no-op, keeps node alive */ });
+// Load selected file raw content
+$('btnLoadSelected').addEventListener('click', async ()=>{
+  const owner = $('ghOwner').value.trim();
+  const repo = $('ghRepo').value.trim();
+  const branch = $('ghBranch').value.trim() || 'main';
+  const selected = $('ghFileList').dataset.selected;
+  if(!owner || !repo || !selected) return showToast('Owner/Repo/Datei auswählen', 'warn');
+  $('ghStatus').textContent = 'Lade Datei...';
+  try{
+    // construct raw URL: https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}
+    const rawUrl = `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(branch)}/${selected}`;
+    const resp = await fetch(rawUrl);
+    if(!resp.ok) throw new Error('Raw fetch failed: ' + resp.status);
+    const content = await resp.text();
+    // Basic safety: limit file size (e.g. 100 KB)
+    if(content.length > 100*1024) { showToast('Datei zu groß', 'err'); $('ghStatus').textContent='File too large'; return; }
+    // Save to editor & activate
+    $('customAlgo').value = content;
+    saveCustomAlgo(content);
+    $('ghStatus').textContent = 'Algorithmus geladen und aktiviert';
+    showToast('Algorithmus geladen (aus GitHub)', 'success');
+  } catch(e){
+    console.error(e);
+    showToast('Fehler beim Laden: ' + e.message, 'err', 6000);
+    $('ghStatus').textContent = 'Fehler: ' + e.message;
+  }
+});
+
+// Clear algorithm
+$('btnClearAlgo').addEventListener('click', ()=>{
+  clearCustomAlgo();
+  $('customAlgo').value = '';
+  $('ghStatus').textContent = 'Custom algorithm cleared';
+});
 
 // -------------------- Messaging (E2E) --------------------
 async function resolveRecipient(identifier){
@@ -479,14 +648,12 @@ async function watchInbox(){
   inboxStore.length = 0;
   if(!localUser) return;
   const myPub = localUser.pair.pub;
-  // listen for keyed messages
   messagesNode.get(myPub).map().on(async (v,k)=>{
     if(!v || !v.payload) return;
     try{
       const secret = await SEA.secret(v.fromPub, localUser.pair);
       const plain = await SEA.decrypt(v.payload, secret);
       if(plain){
-        // dedupe by id
         if(!inboxStore.find(x=>x.id===v.id)){
           inboxStore.push({ id:v.id, from:v.from, fromPub:v.fromPub, text:plain, time:v.time || Date.now() });
           showToast('Neue private Nachricht von ' + v.from, 'info', 5000);
@@ -499,38 +666,107 @@ async function watchInbox(){
   });
 }
 
-// -------------------- Initialization helper --------------------
+// -------------------- Posts subscription & likes wiring --------------------
+// posts keyed get(id).put(...) is used; listen for map()
+postsNode.map().on((v,k)=>{
+  if(!v) return;
+  const key = v.id || k;
+  postsStore[key] = v;
+  renderFeed();
+});
+
+// likes observation sets post._likeCount
+function attachLikesCount(postId){
+  observeLikesForPost(postId, (likesArray)=>{
+    if(postsStore[postId]){ postsStore[postId]._likeCount = likesArray.length; renderFeed(); }
+  });
+}
+
+// -------------------- Feed renderer using custom algorithm if present --------------------
+async function renderFeed(){
+  // private inbox at top
+  if(inboxStore.length && localUser){
+    $('privateInboxArea').classList.remove('hidden');
+    const ib = $('privateInbox'); ib.innerHTML = '';
+    inboxStore.sort((a,b)=>b.time - a.time).forEach(m=>{
+      const div = document.createElement('div'); div.className='top-private';
+      div.innerHTML = `<div style="display:flex;justify-content:space-between"><strong>Privat von ${escapeHtml(m.from)}</strong><span class="muted">${new Date(m.time).toLocaleString()}</span></div>
+                       <div style="margin-top:0.4rem">${escapeHtml(m.text)}</div>`;
+      ib.appendChild(div);
+    });
+  } else {
+    $('privateInboxArea').classList.add('hidden');
+  }
+
+  const arr = Object.values(postsStore).slice(); // copy
+  // ensure like counts are attached & observe likes
+  arr.forEach(p => { if(p && p.id) attachLikesCount(p.id); if(!p._likeCount) p._likeCount = p._likeCount || 0; });
+
+  // compute scores: if custom algorithm present, use worker; otherwise default
+  let scored = [];
+  if(algoCodeRaw){
+    try{
+      scored = await computeScoresWithWorker(arr);
+      const map = {}; scored.forEach(s=> map[s.id] = s.score);
+      arr.forEach(p => p._score = map[p.id] || -99999);
+    } catch(e){ console.error(e); showToast('Error running custom algo: '+e.message, 'err'); arr.forEach(p => p._score = computeScoreDefault(p, localUser)); }
+  } else {
+    arr.forEach(p => p._score = computeScoreDefault(p, localUser));
+  }
+
+  // sort by score desc then time
+  arr.sort((a,b) => {
+    if((b._score||0) !== (a._score||0)) return (b._score||0) - (a._score||0);
+    return (b.time||0) - (a.time||0);
+  });
+
+  const filter = $('filterLang').value;
+  const list = $('feed'); list.innerHTML = '';
+  arr.forEach(post=>{
+    if(filter !== 'all' && post.lang !== filter) return;
+    if(post.public === false && localUser){
+      if(post.authorPub !== (localUser.pair && localUser.pair.pub)) return;
+    } else if(post.public === false && !localUser) return;
+
+    const div = document.createElement('div'); div.className='message';
+    const langLabel = `<span class="lang-pill">${escapeHtml(langName(post.lang || 'en'))}</span>`;
+    const timeStr = post.time ? new Date(post.time).toLocaleString() : '';
+    const author = escapeHtml(post.authorName || post.authorPub || 'anonym');
+    const text = escapeHtml(post.text || '');
+    const scoreLabel = post._score !== undefined ? `<span class="muted" style="margin-left:8px">score:${(Math.round((post._score||0)*100)/100)}</span>` : '';
+    div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${author}</strong> ${langLabel}${scoreLabel}</div><div class="muted">${timeStr}</div></div>
+      <div style="margin-top:0.4rem">${text}</div>
+      <div style="margin-top:0.6rem;display:flex;gap:0.6rem;align-items:center">
+        <button class="like-btn" data-id="${post.id}">❤ <span class="like-count" data-id="${post.id}">${post._likeCount||0}</span></button>
+        <span class="muted">ID: ${escapeHtml(post.id)}</span>
+      </div>`;
+    list.appendChild(div);
+
+    const likeBtn = div.querySelector('.like-btn');
+    likeBtn.addEventListener('click', ()=> toggleLike(post.id));
+    // observe likes updates already done in attachLikesCount -> renderFeed triggers again
+  });
+}
+
+// small periodic re-render to reflect updates and new likes
+setInterval(()=> renderFeed(), 2000);
+
+// -------------------- Inbox & identity init ----------
 function identityLoadedActions(){
   watchInbox();
   renderFeed();
 }
+if(localStorage.getItem('openfeed_user')) { if(loadIdentity()) identityLoadedActions(); }
 
-// auto-load identity if present
-if(localStorage.getItem('openfeed_user')) {
-  if(loadIdentity()) identityLoadedActions();
-}
-
-// -------------------- Lookup helper ----------
-$('btnLookup').addEventListener('click', async ()=>{
-  const id = $('quickLookup').value.trim();
-  if(!id) return showToast('Bitte Eingabe', 'warn');
-  const pub = await resolveRecipient(id);
-  if(pub) $('lookupResult').textContent = 'Resolved pub: ' + pub; else $('lookupResult').textContent = 'Nicht gefunden';
-});
-
-// -------------------- Seed (only once) --------------
+// -------------------- Seed --------------------
 (function seed(){
   if(!localStorage.getItem('openfeed_seeded')){
     const id = 'seed' + Date.now();
-    const obj = { id, authorName:'TxT_swiss', authorPub:null, text:'Welcome to OPENFEED — multilingual P2P prototype (fixed). If posts still do not appear, try opening this page in two browsers and post from one of them to see propagation.', lang:'en', time: Date.now(), public:true };
+    const obj = { id, authorName:'TxT_swiss', authorPub:null, text:'Welcome to OPENFEED — multilingual P2P prototype. You can now load custom ranking algorithms from your GitHub repo.', lang:'en', time: Date.now(), public:true };
     postsNode.get(id).put(obj);
     localStorage.setItem('openfeed_seeded','1');
   }
 })();
-
-// small periodic re-render to pick up any intermittent updates
-setInterval(()=> renderFeed(), 2000);
-
 </script>
 </body>
 </html>
