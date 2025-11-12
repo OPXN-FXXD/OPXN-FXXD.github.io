@@ -1,204 +1,104 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>OPENFEED — Minimal</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenFeed 8-Bit</title>
 <style>
-  :root{--brand:#0b5fff;--muted:#6b7280}
-  *{box-sizing:border-box}
-  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;margin:0;background:#f5f7fb;color:#0b1220;min-height:100vh;display:flex;flex-direction:column}
-  header{background:var(--brand);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:10}
-  .wrap{max-width:900px;margin:12px auto;padding:12px;flex:1}
-  .row{display:flex;gap:12px;align-items:center}
-  .col{display:flex;flex-direction:column;gap:8px}
-  input,textarea,button,select{font:inherit;padding:8px;border-radius:8px;border:1px solid #e6e9ee}
-  textarea{resize:vertical;min-height:80px}
-  .btn{background:var(--brand);color:#fff;border:0;padding:8px 12px;border-radius:10px;cursor:pointer}
-  .ghost{background:#eef4ff;color:var(--brand);border:1px solid #cfe0ff}
-  .feed{margin-top:12px;display:flex;flex-direction:column;gap:10px}
-  .post{background:#fff;padding:10px;border-radius:8px;border:1px solid #eee}
-  .meta{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:0.9rem}
-  footer{padding:10px;text-align:center;color:var(--muted);font-size:0.9rem}
-  @media (max-width:640px){ .row{flex-direction:column;align-items:stretch} }
+  body {
+    font-family: "Press Start 2P", monospace;
+    background:#111; color:#0f0;
+    margin:0; padding:0;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  header { padding:10px; font-size:18px; text-align:center; }
+  #container { width:90%; max-width:600px; margin-top:10px; }
+  input, button, textarea { 
+    font-family: monospace; 
+    font-size:12px; 
+    margin:2px 0; 
+    padding:4px; 
+    border:2px solid #0f0; 
+    background:#111; color:#0f0; 
+  }
+  button { cursor:pointer; }
+  #feed { margin-top:10px; border-top:2px solid #0f0; padding-top:5px; }
+  .post { border-bottom:1px dashed #0f0; margin-bottom:5px; padding-bottom:3px; }
+  @media(max-width:400px){ textarea { width:100%; } input { width:100%; } }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/gun/gun.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
 </head>
 <body>
-<header><strong>OPENFEED — Minimal</strong></header>
+<header>OpenFeed 8-Bit</header>
+<div id="container">
+  <div id="loginArea">
+    <input id="username" placeholder="Benutzername"><br>
+    <input id="passphrase" placeholder="Passphrase (optional)"><br>
+    <button id="createBtn">Erstellen / Laden</button>
+    <div id="loginMsg"></div>
+  </div>
 
-<div class="wrap">
-  <!-- Profile / Identity -->
-  <section class="col" id="profileSection">
-    <div class="row">
-      <input id="username" placeholder="Benutzername (optional)" />
-      <input id="passphrase" placeholder="Passphrase (optional, schützt Schlüssel)" />
-      <button id="btnCreate" class="btn">Identity erstellen</button>
-      <button id="btnLoad" class="ghost">Identity laden</button>
-    </div>
-    <div id="profileInfo" style="color:var(--muted);margin-top:6px">Nicht eingeloggt</div>
-  </section>
+  <div id="postArea" style="display:none;">
+    <textarea id="postText" rows="3" placeholder="Schreibe etwas..."></textarea><br>
+    <button id="postBtn">Posten</button>
+  </div>
 
-  <!-- Compose -->
-  <section style="margin-top:12px" class="col">
-    <textarea id="text" placeholder="Was gibt's Neues? (max 1000 Zeichen)" maxlength="1000"></textarea>
-    <div class="row">
-      <select id="lang" style="width:120px">
-        <option value="en">EN</option><option value="de">DE</option><option value="fr">FR</option><option value="es">ES</option>
-      </select>
-      <button id="btnPost" class="btn">Posten</button>
-      <div id="status" style="color:var(--muted);font-size:0.9rem;margin-left:auto"></div>
-    </div>
-  </section>
-
-  <!-- Feed -->
-  <section class="feed" id="feed"></section>
+  <div id="feed"></div>
 </div>
 
-<footer>Minimal OPENFEED — P2P • posts sind öffentlich • sehr einfach</footer>
-
 <script>
-/* Minimal OPENFEED — kein Algorithmus, sofort sichtbare Posts */
+const gun = Gun({ peers:['https://gun-manhattan.herokuapp.com/gun'] });
+const posts = gun.get('openfeed_posts');
 
-// --- Setup Gun
-const gun = Gun({
-  peers: [
-    'https://gun-manhattan.herokuapp.com/gun',
-    'https://gun-us.herokuapp.com/gun'
-  ]
-});
-const postsNode = gun.get('openfeed_posts');
-const profiles = gun.get('openfeed_profiles');
+let user = null;
 
-// --- State
-const postsStore = {}; // id -> post
-let local = { username: null, pair: null, pub: null };
-
-// --- Helpers
-const $ = id => document.getElementById(id);
-const now = () => Date.now();
-function esc(s){ if(!s) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
-function showStatus(t){ $('status').textContent = t; setTimeout(()=>{ if($('status').textContent===t) $('status').textContent=''; }, 2500); }
-
-// --- Identity (very small, optional encryption not implemented: SEA.pair used; pair saved only if passphrase set)
-async function createIdentity(){
-  const name = $('username').value.trim();
-  const pass = $('passphrase').value.trim();
-  if(!name){ showStatus('Benutzername wird empfohlen'); }
-  const pair = await SEA.pair();
-  local.pair = pair;
-  local.username = name || ('user' + Math.random().toString(36).slice(2,6));
-  local.pub = pair.pub;
-  // store minimal public meta
-  try{ localStorage.setItem('openfeed_pub', JSON.stringify({ username: local.username, pub: local.pub })); }catch(e){}
-  // store private pair if passphrase set (simple: encrypted by SEA; this is optional minimal)
-  if(pass){
-    try{
-      const enc = await SEA.encrypt(pair, await SEA.work(pass, null, null));
-      localStorage.setItem('openfeed_enc_pair', JSON.stringify({ enc })); // small convenience (not full WebCrypto)
-      showStatus('Identität erstellt und (einfach) geschützt');
-    } catch(e){ console.warn(e); showStatus('Erstellt (schutz fehlgeschlagen)'); }
-  } else {
-    showStatus('Identität erstellt (nicht persistent)');
-  }
-  // publish profile
-  profiles.get(local.username).put({ username: local.username, pub: local.pub, createdAt: now() });
-  renderProfile();
+function showFeed(){
+  posts.map().once(post=>{
+    if(!post || !post.text) return;
+    const id = post.id || Math.random().toString(36).slice(2,8);
+    if(document.getElementById(id)) return; // schon da
+    const div = document.createElement('div');
+    div.id = id;
+    div.className = 'post';
+    div.textContent = (post.author||'anonym') + ": " + post.text;
+    document.getElementById('feed').prepend(div);
+  });
 }
 
-async function loadIdentity(){
-  // try simple encrypted pair first
-  const pass = $('passphrase').value.trim();
-  const encRaw = localStorage.getItem('openfeed_enc_pair');
-  if(encRaw && pass){
-    try{
-      const parsed = JSON.parse(encRaw);
-      const maybePair = await SEA.decrypt(parsed.enc, await SEA.work(pass, null, null));
-      if(maybePair && maybePair.pub){
-        local.pair = maybePair;
-        local.pub = maybePair.pub;
-        const meta = JSON.parse(localStorage.getItem('openfeed_pub') || '{}');
-        local.username = meta.username || ('user' + Math.random().toString(36).slice(2,6));
-        showStatus('Verschlüsselte Identität geladen');
-        renderProfile();
-        return;
-      }
-    } catch(e){ console.warn('load enc fail', e); }
-  }
-  // fallback: load public-only
+document.getElementById('createBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('username').value.trim();
+  const pass = document.getElementById('passphrase').value.trim();
+  if(!name){ document.getElementById('loginMsg').textContent="Benutzername nötig"; return; }
+  const pair = pass ? await SEA.pair(pass) : await SEA.pair();
+  user = { username:name, pair };
+  localStorage.setItem('openfeed_user', JSON.stringify({ username:name, pair }));
+  document.getElementById('loginArea').style.display='none';
+  document.getElementById('postArea').style.display='block';
+  showFeed();
+});
+
+document.getElementById('postBtn').addEventListener('click', async ()=>{
+  if(!user){ alert("Bitte erst erstellen"); return; }
+  const text = document.getElementById('postText').value.trim();
+  if(!text) return;
+  const id = 'p'+Date.now()+Math.random().toString(36).slice(2,6);
+  posts.get(id).put({ id, text, author:user.username, time:Date.now() });
+  document.getElementById('postText').value='';
+});
+
+posts.map().on(()=> showFeed());
+
+// auto load local user
+const saved = localStorage.getItem('openfeed_user');
+if(saved){
   try{
-    const pub = JSON.parse(localStorage.getItem('openfeed_pub') || 'null');
-    if(pub && pub.pub){
-      local.username = pub.username; local.pub = pub.pub; local.pair = null;
-      showStatus('Öffentliches Profil geladen (kein privater Schlüssel)');
-      renderProfile(); return;
-    }
+    const u = JSON.parse(saved); user=u;
+    document.getElementById('loginArea').style.display='none';
+    document.getElementById('postArea').style.display='block';
+    showFeed();
   } catch(e){}
-  showStatus('Keine gespeicherte Identität gefunden');
 }
-
-function renderProfile(){
-  if(!local.username) { $('profileInfo').textContent = 'Nicht eingeloggt'; return; }
-  $('profileInfo').innerHTML = `Angemeldet als <strong>${esc(local.username)}</strong> <span style="color:var(--muted)">(${esc(local.pub||'no-key')})</span>`;
-}
-
-// --- Posting
-$('btnPost').addEventListener('click', async ()=>{
-  const text = $('text').value.trim();
-  if(!text){ showStatus('Bitte Text eingeben'); return; }
-  if(text.length > 1000){ showStatus('Text zu lang'); return; }
-  const lang = $('lang').value || 'en';
-  const id = 'p' + Date.now() + Math.random().toString(36).slice(2,8);
-  const post = {
-    id, author: local.username || 'anonym', authorPub: local.pub || null, text, lang, time: now(), public: true
-  };
-  // write to Gun
-  postsNode.get(id).put(post);
-  // also show immediately locally so poster sees it without waiting for network
-  postsStore[id] = post;
-  renderFeed();
-  $('text').value = '';
-  showStatus('Post veröffentlicht');
-});
-
-// --- Subscribe to posts (map)
-postsNode.map().on((v,k)=>{
-  if(!v) return;
-  const key = v.id || k;
-  // normalize important fields
-  v.id = v.id || key;
-  v.time = v.time || Date.now();
-  postsStore[key] = v;
-  renderFeed();
-});
-
-// --- Render feed: sort by time desc and show public posts
-function renderFeed(){
-  const feed = $('feed');
-  feed.innerHTML = '';
-  const arr = Object.values(postsStore).filter(p=>p && p.public!==false);
-  arr.sort((a,b)=> (b.time||0) - (a.time||0));
-  if(arr.length===0){ feed.innerHTML = '<div style="color:var(--muted)">Kein Inhalt — schreibe den ersten Post!</div>'; return; }
-  for(const p of arr){
-    const d = document.createElement('div'); d.className='post';
-    const time = new Date((p.time||0)).toLocaleString();
-    d.innerHTML = `<div class="meta"><div><strong>${esc(p.author||'anonym')}</strong> · <span style="color:var(--muted)">${esc(p.lang||'en')}</span></div><div>${esc(time)}</div></div>
-                   <div style="margin-top:8px;white-space:pre-wrap">${esc(p.text)}</div>
-                   <div style="margin-top:8px;color:var(--muted);font-size:0.85rem">ID: ${esc(p.id)}</div>`;
-    feed.appendChild(d);
-  }
-}
-
-// --- Quick start: load public meta if exists
-(function init(){
-  try{
-    const pub = JSON.parse(localStorage.getItem('openfeed_pub') || 'null');
-    if(pub){ local.username = pub.username; local.pub = pub.pub; renderProfile(); }
-  } catch(e){}
-  renderFeed();
-})();
-
 </script>
 </body>
 </html>
