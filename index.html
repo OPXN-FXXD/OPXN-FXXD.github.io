@@ -1,10 +1,9 @@
-
 <!doctype html>
 <html lang="de">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>OPENFEED — P2P</title>
+<title>OPENFEED — P2P (Hardened)</title>
 <style>
   :root{--brand:#0b5fff;--muted:#6b7280}
   body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:#f7f8fb;color:#0b1220;min-height:100vh;display:flex;flex-direction:column}
@@ -17,7 +16,6 @@
   .btn{background:var(--brand);color:white;padding:0.5rem;border-radius:8px;border:0;cursor:pointer}
   .btn.ghost{background:#eef4ff;color:var(--brand);border:1px solid #cfe0ff}
   .like-btn{background:none;border:1px solid #e6e9ee;padding:0.25rem 0.5rem;border-radius:6px;cursor:pointer}
-  .liked{background:#ffdce0;border-color:#ff9aa2}
   .lang-pill{display:inline-block;padding:0.15rem 0.4rem;border-radius:4px;border:1px solid #e6e9ee;margin-left:0.4rem;font-size:0.8rem}
   footer.nav{position:fixed;left:0;right:0;bottom:0;background:white;border-top:1px solid #eee;padding:0.5rem 0;display:flex;justify-content:center;gap:1rem;z-index:40}
   footer.nav button{width:120px;border-radius:999px}
@@ -34,11 +32,13 @@
   .file-item:hover{background:#eef4ff}
   @media (max-width:900px){ .grid{grid-template-columns:1fr} aside{order:2} }
 </style>
+
+<!-- GUN & SEA -->
 <script src="https://cdn.jsdelivr.net/npm/gun/gun.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
 </head>
 <body>
-<header><h1 style="margin:0">OPENFEED — P2P</h1></header>
+<header><h1 style="margin:0">OPENFEED — P2P (Hardened)</h1></header>
 
 <div class="container">
   <!-- FEED PAGE -->
@@ -76,10 +76,9 @@
         <section style="margin-bottom:1rem">
           <h4>Kurzanleitung</h4>
           <div class="muted">
-            - Navigation unten: Feed / Profil / Posten.<br>
+            - Navigation unten: Feed / Profil / Posten. <br>
             - Private Nachrichten (E2E) erscheinen oben im Feed nur für dich.<br>
-            - Likes & Sprache bleiben aktiv.<br>
-            - Custom-Algorithmus: lege eine JS-Datei in dein GitHub-Repo (siehe Profil → GitHub-Algorithmen).
+            - Custom-Algorithmus: lade eine JS-Datei aus einem öffentlichen GitHub-Repo oder schreibe eine Funktion im Editor.
           </div>
         </section>
 
@@ -131,7 +130,7 @@
 
         <section style="margin-top:1rem">
           <h4>GitHub: Algorithmus laden (öffentliche Repo)</h4>
-          <div class="muted">Gib Repo-Details ein (standardmäßig auf dein Pages-Repo gesetzt). Du kannst dann Dateien im Repo browsen und eine Algorithmus-JS-Datei laden.</div>
+          <div class="muted">Gib Repo-Details ein (öffentliche Repos ohne Token).</div>
           <div style="margin-top:0.5rem;display:flex;gap:0.5rem">
             <input id="ghOwner" placeholder="Owner" value="OPXN-FXXD" style="padding:0.4rem">
             <input id="ghRepo" placeholder="Repo" value="OPXN-FXXD.github.io" style="padding:0.4rem">
@@ -151,8 +150,8 @@
 
         <section style="margin-top:1rem">
           <h4>Custom Algorithm (Editor)</h4>
-          <label class="muted">Du kannst auch einen Algorithmus hier editieren oder testen (wird im Worker ausgeführt)</label>
-          <textarea id="customAlgo" rows="6" style="width:100%;padding:0.4rem;margin-top:0.4rem" placeholder="// function score(post, user, utils) { return ... }"></textarea>
+          <label class="muted">Gib eine JavaScript-Funktion als Body ein. Signature: <code>function(post,user,utils){ /* return numeric score */ }</code></label>
+          <textarea id="customAlgo" rows="6" style="width:100%;padding:0.4rem;margin-top:0.4rem" placeholder="// return 1 for high priority"></textarea>
           <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
             <button class="btn ghost" id="btnSaveCustom">Save & Activate</button>
             <button class="btn ghost" id="btnTestCustom">Test on sample</button>
@@ -166,10 +165,9 @@
         <section>
           <h4>Hinweise</h4>
           <div class="muted">
-            - GitHub Lesezugriff funktioniert nur für öffentliche Repos ohne Token.<br>
-            - Die geladene Datei sollte eine JS-Funktion enthalten, die einen numerischen Score zurückgibt (siehe Beispiele).<br>
-            - Execution läuft im Web Worker mit Timeout (sicherer als direktes eval).<br>
-            - Private Schlüssel werden nicht unverschlüsselt gespeichert (wenn Passphrase genutzt wird, verschlüsselt gespeichert).
+            - Geladene Datei sollte nur die Funktionslogik (keine "export" Syntax) enthalten.<br>
+            - Execution läuft im Web Worker mit Timeout (sicherer als eval).<br>
+            - Private Schlüssel werden nur verschlüsselt gespeichert, wenn eine Passphrase gesetzt ist.
           </div>
         </section>
       </aside>
@@ -205,7 +203,7 @@
       <aside>
         <section>
           <h4>Private Nachricht</h4>
-          <div class="muted">Wenn du als Empfänger einen PublicKey angibst oder einen existierenden username, wird die Nachricht E2E verschlüsselt und nur dem Empfänger zugänglich gemacht (erscheint dann oben im Feed für ihn).</div>
+          <div class="muted">Wenn du einen PubKey oder existierenden Benutzer angibst, wird E2E verschlüsselt (nur wenn privater Schlüssel geladen).</div>
         </section>
       </aside>
     </div>
@@ -223,13 +221,14 @@
 <div class="toast-wrap" id="toasts"></div>
 
 <script>
-/* OPENFEED P2P — Hardened version
-   Security/robustness changes:
-   - Do NOT store private SEA pair unencrypted. If a passphrase is provided, the pair is encrypted with WebCrypto (PBKDF2 + AES-GCM) and stored.
-   - Correct use of SEA.pair(); safe worker timeouts; input size limits; file size checks; better error handling.
+/* OPENFEED — vollständige, robuste Version
+   - Worker erstellt score-Funktion einmalig (reduziert Fehler/Overhead)
+   - Per-post timeout + fallback auf default score
+   - Passphrase-geschützte Persistenz (WebCrypto PBKDF2 + AES-GCM)
+   - GitHub raw fetch size checks
 */
 
-// -------------------- Utilities --------------------
+// -------------------- Short utils --------------------
 const $ = id => document.getElementById(id);
 function escapeHtml(s){ if(!s) return ''; return s.toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;') }
 function showToast(msg, kind='info', ttl=4000){
@@ -241,7 +240,7 @@ function showToast(msg, kind='info', ttl=4000){
   setTimeout(()=> { el.style.opacity = '0'; el.style.transform = 'translateX(20px)'; setTimeout(()=>el.remove(),400); }, ttl);
 }
 
-// -------------------- WebCrypto helpers for encrypting the pair --------------------
+// -------------------- WebCrypto helpers --------------------
 const CRYPTO = window.crypto || window.msCrypto;
 async function deriveKeyFromPassphrase(passphrase, saltHex){
   const enc = new TextEncoder();
@@ -271,10 +270,9 @@ async function decryptJSON(encObj, key){
 function bufToHex(b){ return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''); }
 function hexToBuf(hex){ const bytes = new Uint8Array(hex.length/2); for(let i=0;i<bytes.length;i++){ bytes[i]=parseInt(hex.substr(i*2,2),16); } return bytes; }
 
-// -------------------- Gun setup --------------------
+// -------------------- GUN setup --------------------
 const gun = Gun({
   peers: [
-    // public relay peers (can be changed). Keep a short list to reduce surface.
     'https://gun-manhattan.herokuapp.com/gun',
     'https://gun-us.herokuapp.com/gun'
   ],
@@ -285,11 +283,11 @@ const likesNode = gun.get('likes_by_post');
 const messagesNode = gun.get('openfeed_messages');
 
 // -------------------- App state --------------------
-let localUser = null; // { username, pair (in-memory or decrypted), lang }
+let localUser = null; // { username, pair, lang }
 const postsStore = {}; // id -> post
-const inboxStore = []; // decrypted private messages
+const inboxStore = []; // decrypted messages
 
-// -------------------- SPA Navigation --------------------
+// -------------------- Navigation --------------------
 function showPage(pageId){
   document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
   $(pageId).classList.remove('hidden');
@@ -305,21 +303,18 @@ $('navProfile').addEventListener('click', ()=> showPage('page-profile'));
 $('navPost').addEventListener('click', ()=> showPage('page-post'));
 showPage('page-feed');
 
-// -------------------- Identity & Profile --------------------
-// storage keys
-const STORAGE_KEY_ENC = 'openfeed_user_enc_v1'; // encrypted pair + meta
-const STORAGE_KEY_PUBONLY = 'openfeed_user_pub_v1'; // public-only cache (safe)
+// -------------------- Identity & storage --------------------
+const STORAGE_KEY_ENC = 'openfeed_user_enc_v1';
+const STORAGE_KEY_PUBONLY = 'openfeed_user_pub_v1';
 const STORAGE_KEY_SEED = 'openfeed_seeded';
 
 async function createIdentity(username, passphrase){
-  if(!username){ showToast('Benutzername benötigt', 'warn'); return; }
-  const pair = await SEA.pair(); // correct usage
+  if(!username) { showToast('Benutzername benötigt', 'warn'); return; }
+  const pair = await SEA.pair();
   localUser = { username, pair, lang: $('profileLang').value || 'en' };
 
-  // store only public metadata in localStorage (safe)
-  try { localStorage.setItem(STORAGE_KEY_PUBONLY, JSON.stringify({ username, pub: pair.pub, lang: localUser.lang, createdAt: new Date().toISOString() })); } catch(e){ console.warn('Could not persist public meta', e); }
+  try{ localStorage.setItem(STORAGE_KEY_PUBONLY, JSON.stringify({ username, pub: pair.pub, lang: localUser.lang, createdAt: new Date().toISOString() })); } catch(e){}
 
-  // if passphrase provided, encrypt private pair and store; otherwise keep pair in-memory only
   if(passphrase && passphrase.length >= 6){
     try{
       const { key, salt } = await deriveKeyFromPassphrase(passphrase);
@@ -327,14 +322,11 @@ async function createIdentity(username, passphrase){
       const payload = { username, pub: pair.pub, salt, enc };
       localStorage.setItem(STORAGE_KEY_ENC, JSON.stringify(payload));
       showToast('Identität erstellt und verschlüsselt gespeichert', 'success');
-    } catch(e){
-      console.error(e); showToast('Fehler beim Speichern der Identität', 'err');
-    }
+    } catch(e){ console.error(e); showToast('Fehler beim Speichern', 'err'); }
   } else {
     showToast('Identität erstellt (nicht persistent — keine Passphrase)', 'info');
   }
 
-  // publish profile (only public fields)
   const profile = { username, pub: pair.pub, lang: localUser.lang, createdAt: new Date().toISOString() };
   profilesNode.get(username).put(profile);
   renderProfile(profile);
@@ -342,7 +334,6 @@ async function createIdentity(username, passphrase){
   return profile;
 }
 
-// load identity: try encrypted storage first, else public-only (no private pair)
 async function loadIdentityFromStorage(passphrase=null){
   try{
     const encRaw = localStorage.getItem(STORAGE_KEY_ENC);
@@ -352,14 +343,12 @@ async function loadIdentityFromStorage(passphrase=null){
       const { key } = await deriveKeyFromPassphrase(passphrase, parsed.salt);
       const pair = await decryptJSON(parsed.enc, key);
       localUser = { username: parsed.username, pair, lang: $('profileLang').value || 'en' };
-      // update public-only meta
-      try { localStorage.setItem(STORAGE_KEY_PUBONLY, JSON.stringify({ username: parsed.username, pub: pair.pub, lang: localUser.lang })); } catch(e){}
+      try{ localStorage.setItem(STORAGE_KEY_PUBONLY, JSON.stringify({ username: parsed.username, pub: pair.pub, lang: localUser.lang })); } catch(e){}
       renderProfile({ username: localUser.username, pub: pair.pub, lang: localUser.lang });
       watchInbox();
       showToast('Verschlüsselte Identität geladen', 'info');
       return localUser;
     } else {
-      // try public-only meta
       const pubRaw = localStorage.getItem(STORAGE_KEY_PUBONLY);
       if(!pubRaw){ showToast('Keine gespeicherte Identität gefunden', 'warn'); return null; }
       const meta = JSON.parse(pubRaw);
@@ -368,7 +357,7 @@ async function loadIdentityFromStorage(passphrase=null){
       showToast('Nur öffentliches Profil geladen (kein privater Schlüssel)', 'info');
       return localUser;
     }
-  } catch(e){ console.error(e); showToast('Fehler beim Laden der Identität', 'err'); return null; }
+  } catch(e){ console.error(e); showToast('Fehler beim Laden', 'err'); return null; }
 }
 
 function renderProfile(profile){
@@ -390,7 +379,7 @@ $('btnSaveLang').addEventListener('click', ()=> {
   if(!localUser) return showToast('Bitte erst Identität erstellen / laden', 'warn');
   localUser.lang = $('profileLang').value;
   try { const pub = JSON.parse(localStorage.getItem(STORAGE_KEY_PUBONLY) || '{}'); pub.lang = localUser.lang; localStorage.setItem(STORAGE_KEY_PUBONLY, JSON.stringify(pub)); } catch(e){}
-  profilesNode.get(localUser.username).put({ username: localUser.username, pub: localUser.pair ? localUser.pair.pub : (pub && pub.pub), lang: localUser.lang, updatedAt: new Date().toISOString() });
+  profilesNode.get(localUser.username).put({ username: localUser.username, pub: localUser.pair ? localUser.pair.pub : '', lang: localUser.lang, updatedAt: new Date().toISOString() });
   renderProfile({ username: localUser.username, pub: localUser.pair ? localUser.pair.pub : '', lang: localUser.lang });
   showToast('Sprache gespeichert', 'success');
 });
@@ -398,7 +387,6 @@ $('btnSaveLang').addEventListener('click', ()=> {
 $('btnExportProfile').addEventListener('click', async ()=> {
   if(!localUser) return showToast('Keine Identität vorhanden', 'warn');
   const out = { username: localUser.username, pub: localUser.pair ? localUser.pair.pub : null, exportedAt: new Date().toISOString() };
-  // if we have private pair in memory, include it in export (user intends)
   if(localUser.pair) out.pair = localUser.pair;
   const blob = new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -464,7 +452,6 @@ async function toggleLike(postId){
     else { node.get(myPub).put(true); showToast('Gefällt mir', 'success'); }
   });
 }
-
 function observeLikesForPost(postId, cb){
   const node = likesNode.get(postId);
   const update = () => {
@@ -476,23 +463,9 @@ function observeLikesForPost(postId, cb){
   update();
 }
 
-// -------------------- Feed ranking & default algorithm --------------------
-function langName(code){
-  switch(code){
-    case 'en': return 'EN';
-    case 'de': return 'DE';
-    case 'fr': return 'FR';
-    case 'ja': return 'JP';
-    case 'zh': return 'ZH';
-    case 'es': return 'ES';
-    case 'ru': return 'RU';
-    default: return code;
-  }
-}
-
-function loadWeights(){
-  try{ return JSON.parse(localStorage.getItem('openfeed_weights')) || { lang:1.0, recency:1.0, likes:1.0 }; } catch(e){ return { lang:1.0, recency:1.0, likes:1.0 }; }
-}
+// -------------------- Ranking defaults --------------------
+function langName(code){ switch(code){ case 'en': return 'EN'; case 'de': return 'DE'; case 'fr': return 'FR'; case 'ja': return 'JP'; case 'zh': return 'ZH'; case 'es': return 'ES'; case 'ru': return 'RU'; default: return code; } }
+function loadWeights(){ try{ return JSON.parse(localStorage.getItem('openfeed_weights')) || { lang:1.0, recency:1.0, likes:1.0 }; } catch(e){ return { lang:1.0, recency:1.0, likes:1.0 }; } }
 function computeScoreDefault(post, user){
   const w = loadWeights();
   const langScore = (post.lang === (user && user.lang ? user.lang : 'en')) ? 1 : 0;
@@ -502,33 +475,41 @@ function computeScoreDefault(post, user){
   return w.lang * langScore + w.recency * recencyScore + w.likes * Math.log(1 + likeCount);
 }
 
-// -------------------- Custom algorithm via GitHub or editor --------------------
+// -------------------- Custom algorithm: Worker (robust) --------------------
 let algoWorker = null;
-let algoCodeRaw = null;
+let algoCodeRaw = null; // raw code string
 const WORKER_TIMEOUT_MS = 500;
 const MAX_POSTS_FOR_CUSTOM = 200;
 const MAX_ALGO_LENGTH = 100 * 1024; // 100 KB
 
+// create worker and embed user code once (safer & faster)
 function createAlgoWorkerFromCode(codeStr){
-  // Build worker that constructs function from provided source but with safety wrappers
+  // prepare worker script: build user function once at worker load time
   const workerSrc = `
+    let userScoreFn = null;
+    try {
+      // create function from provided source; user should provide function body or 'return ...' expression
+      userScoreFn = new Function('post','user','utils', ${JSON.stringify(codeStr)});
+    } catch(e){
+      // initialization error
+      self.postMessage({ initError: String(e) });
+    }
+
     self.onmessage = function(ev){
       const data = ev.data;
       if(!data || data.cmd !== 'score') return;
       try {
-        const userFuncSrc = ${JSON.stringify(codeStr)};
-        // create function with (post,user,utils) signature
-        const scoreFn = new Function('post','user','utils', userFuncSrc);
+        if(!userScoreFn) { self.postMessage({ ok:false, error:'score function not initialized' }); return; }
         const utils = {
           likes: function(p){ return (p._likeCount || 0); },
           ageSec: function(p){ return ((Date.now() - (p.time||Date.now()))/1000); },
           langMatch: function(p,u){ return (p.lang === (u && u.lang ? u.lang : 'en') ? 1 : 0); }
         };
-        // run
-        const score = scoreFn(data.post, data.user, utils);
-        self.postMessage({ ok: true, score: Number(score) || 0 });
+        // call user function
+        const score = userScoreFn(data.post, data.user, utils);
+        self.postMessage({ ok:true, score: Number(score) || 0 });
       } catch(e){
-        self.postMessage({ ok: false, error: String(e) });
+        self.postMessage({ ok:false, error: String(e) });
       }
     };
   `;
@@ -537,26 +518,54 @@ function createAlgoWorkerFromCode(codeStr){
   return worker;
 }
 
+// robust per-post scoring with fallback
 async function computeScoresWithWorker(posts){
   if(!algoCodeRaw) return posts.map(p => ({ id: p.id, score: computeScoreDefault(p, localUser) }));
-  if(!algoWorker) algoWorker = createAlgoWorkerFromCode(algoCodeRaw);
+  // Ensure worker exists and is initialized
+  try {
+    if(!algoWorker) algoWorker = createAlgoWorkerFromCode(algoCodeRaw);
+  } catch(e){
+    console.error('worker create failed', e);
+    return posts.map(p => ({ id: p.id, score: computeScoreDefault(p, localUser) }));
+  }
+
+  // listen for immediate init error
+  let initProblem = false;
+  const initHandler = (ev) => {
+    if(ev.data && ev.data.initError){
+      initProblem = true;
+      console.error('Algorithm init error:', ev.data.initError);
+    }
+  };
+  algoWorker.addEventListener('message', initHandler);
+  // small delay to allow init message if any (non-blocking, short)
+  await new Promise(r => setTimeout(r, 10));
+  algoWorker.removeEventListener('message', initHandler);
+  if(initProblem){
+    try{ algoWorker.terminate(); }catch(e){} algoWorker = null;
+    showToast('Custom algorithm initialisation failed — using default scoring', 'warn', 5000);
+    return posts.map(p => ({ id: p.id, score: computeScoreDefault(p, localUser) }));
+  }
+
   const limited = posts.slice(0, MAX_POSTS_FOR_CUSTOM);
   const promises = limited.map(p => new Promise(resolve => {
     let done = false;
     const onmsg = (ev) => {
       done = true;
       algoWorker.removeEventListener('message', onmsg);
-      resolve({ id: p.id, score: ev.data && ev.data.ok ? ev.data.score : -99999 });
+      if(ev.data && ev.data.ok) resolve({ id: p.id, score: Number(ev.data.score) || computeScoreDefault(p, localUser) });
+      else resolve({ id: p.id, score: computeScoreDefault(p, localUser) });
     };
-    algoWorker.addEventListener('message', onmsg);
-    // snapshot to avoid sending heavy objects
-    try{
+    try {
+      algoWorker.addEventListener('message', onmsg);
       algoWorker.postMessage({ cmd:'score', post: { id:p.id, lang:p.lang, time:p.time, _likeCount:p._likeCount||0, text: p.text }, user: { username: localUser ? localUser.username : null, lang: localUser ? localUser.lang : 'en' } });
     } catch(e){
-      algoWorker.removeEventListener('message', onmsg);
-      resolve({ id: p.id, score: -99999 });
+      try{ algoWorker.terminate(); }catch(_){} algoWorker = null;
+      resolve({ id: p.id, score: computeScoreDefault(p, localUser) });
+      return;
     }
-    setTimeout(()=>{ if(!done){ try{ algoWorker.terminate(); }catch(e){} algoWorker = null; resolve({ id: p.id, score: -99999 }); } }, WORKER_TIMEOUT_MS);
+    // timeout fallback
+    setTimeout(()=>{ if(!done){ try{ algoWorker.removeEventListener('message', onmsg); }catch(e){} resolve({ id: p.id, score: computeScoreDefault(p, localUser) }); } }, WORKER_TIMEOUT_MS);
   }));
   const res = await Promise.all(promises);
   if(posts.length > limited.length){
@@ -566,6 +575,7 @@ async function computeScoresWithWorker(posts){
   return res;
 }
 
+// manage saving/loading algorithm
 function saveCustomAlgo(code){
   if(!code || code.length > MAX_ALGO_LENGTH) { showToast('Algorithmus fehlt oder zu groß', 'warn'); return; }
   algoCodeRaw = code;
@@ -581,7 +591,6 @@ function clearCustomAlgo(){
 function loadCustomAlgoFromStorage(){
   try{ const c = localStorage.getItem('openfeed_algo'); if(c) { algoCodeRaw = c; return c; } } catch(e){} return null;
 }
-
 $('btnSaveCustom').addEventListener('click', ()=> {
   const code = $('customAlgo').value.trim();
   if(!code) return showToast('Kein Algorithmus eingegeben', 'warn');
@@ -593,38 +602,35 @@ $('btnTestCustom').addEventListener('click', async ()=> {
   const code = $('customAlgo').value.trim();
   if(!code) return showToast('Kein Code zum Testen', 'warn');
   const worker = createAlgoWorkerFromCode(code);
-  const samplePost = { id:'s1', lang:'en', time: Date.now(), _likeCount: 3, text:'Hello' };
   let done = false;
   const onmsg = (ev) => {
     done = true;
     worker.terminate();
-    showToast(ev.data && ev.data.ok ? ('Test OK — score=' + ev.data.score) : ('Test failed: ' + (ev.data.error||'unknown')), ev.data && ev.data.ok ? 'success' : 'err', 5000);
+    if(ev.data && ev.data.initError) showToast('Init error: ' + ev.data.initError, 'err', 6000);
+    else if(ev.data && ev.data.ok) showToast('Test OK — score=' + ev.data.score, 'success', 5000);
+    else showToast('Test failed: ' + (ev.data && ev.data.error ? ev.data.error : 'unknown'), 'err', 6000);
   };
   worker.addEventListener('message', onmsg);
   try{
-    worker.postMessage({ cmd:'score', post: samplePost, user: { username: localUser ? localUser.username : null, lang: localUser ? localUser.lang : 'en' } });
+    worker.postMessage({ cmd:'score', post: { id:'s1', lang:'en', time: Date.now(), _likeCount:3, text:'Hello' }, user: { username: localUser ? localUser.username : null, lang: localUser ? localUser.lang : 'en' } });
   } catch(e){ worker.terminate(); showToast('Fehler beim Test', 'err'); }
   setTimeout(()=>{ if(!done){ try{ worker.terminate(); }catch(e){} showToast('Test timeout or error', 'err'); } }, WORKER_TIMEOUT_MS + 100);
 });
-
-// try load existing algorithm on startup
 loadCustomAlgoFromStorage();
 if(algoCodeRaw){ $('customAlgo').value = algoCodeRaw; showToast('Custom algorithm loaded from storage', 'info'); }
 
-// -------------------- GitHub: list files & load selected --------------------
+// -------------------- GitHub load --------------------
 async function githubListContents(owner, repo, path='', branch='main'){
   const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`;
   const resp = await fetch(apiUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' }});
   if(!resp.ok) throw new Error('GitHub API error: ' + resp.status);
   return await resp.json();
 }
-
 function renderFileList(items){
   const list = $('ghFileList');
   list.innerHTML = '';
   if(!Array.isArray(items) || items.length===0){ list.innerHTML = '<div class="muted">Keine Dateien gefunden</div>'; return; }
   items.forEach(it=>{
-    // only show files and dirs
     if(!it || (!it.type)) return;
     const allowed = (it.type === 'file' && (it.name.endsWith('.js') || it.name.endsWith('.mjs') || it.name.endsWith('.algo') || it.name.endsWith('.txt'))) || it.type === 'dir';
     if(!allowed) return;
@@ -640,7 +646,6 @@ function renderFileList(items){
     list.appendChild(div);
   });
 }
-
 $('btnListFiles').addEventListener('click', async ()=> {
   const owner = $('ghOwner').value.trim();
   const repo = $('ghRepo').value.trim();
@@ -659,7 +664,6 @@ $('btnListFiles').addEventListener('click', async ()=> {
     $('ghStatus').textContent = 'Fehler: ' + e.message;
   }
 });
-
 $('btnLoadSelected').addEventListener('click', async ()=> {
   const owner = $('ghOwner').value.trim();
   const repo = $('ghRepo').value.trim();
@@ -685,22 +689,14 @@ $('btnLoadSelected').addEventListener('click', async ()=> {
     $('ghStatus').textContent = 'Fehler: ' + e.message;
   }
 });
-
-$('btnClearAlgo').addEventListener('click', ()=> {
-  clearCustomAlgo();
-  $('customAlgo').value = '';
-  $('ghStatus').textContent = 'Custom algorithm cleared';
-});
+$('btnClearAlgo').addEventListener('click', ()=> { clearCustomAlgo(); $('customAlgo').value = ''; $('ghStatus').textContent = 'Custom algorithm cleared'; });
 
 // -------------------- Messaging (E2E) --------------------
 async function resolveRecipient(identifier){
   if(!identifier) return null;
-  if(identifier.length>40 || identifier.indexOf('=')>-1) return identifier; // likely a pub key
-  return new Promise(resolve => {
-    profilesNode.get(identifier).once(v=>{ if(v && v.pub) resolve(v.pub); else resolve(null); });
-  });
+  if(identifier.length>40 || identifier.indexOf('=')>-1) return identifier;
+  return new Promise(resolve => { profilesNode.get(identifier).once(v=>{ if(v && v.pub) resolve(v.pub); else resolve(null); }); });
 }
-
 async function watchInbox(){
   inboxStore.length = 0;
   if(!localUser || !localUser.pair) return;
@@ -717,20 +713,17 @@ async function watchInbox(){
           renderFeed();
         }
       }
-    } catch(err){
-      console.error('decrypt error', err);
-    }
+    } catch(err){ console.error('decrypt error', err); }
   });
 }
 
-// -------------------- Posts subscription & likes wiring --------------------
+// -------------------- Posts subscription & likes --------------------
 postsNode.map().on((v,k)=>{
   if(!v) return;
   const key = v.id || k;
   postsStore[key] = v;
   renderFeed();
 });
-
 function attachLikesCount(postId){
   observeLikesForPost(postId, (likesArray)=>{
     if(postsStore[postId]){ postsStore[postId]._likeCount = likesArray.length; renderFeed(); }
@@ -755,18 +748,19 @@ async function renderFeed(){
   const arr = Object.values(postsStore).slice();
   arr.forEach(p => { if(p && p.id) attachLikesCount(p.id); if(!p._likeCount) p._likeCount = p._likeCount || 0; });
 
-  // compute scores
+  // compute scores (worker or default)
   let scored = [];
   if(algoCodeRaw){
     try{
       scored = await computeScoresWithWorker(arr);
       const map = {}; scored.forEach(s=> map[s.id] = s.score);
-      arr.forEach(p => p._score = map[p.id] || -99999);
+      arr.forEach(p => p._score = map[p.id] || computeScoreDefault(p, localUser));
     } catch(e){ console.error(e); showToast('Error running custom algo: '+e.message, 'err'); arr.forEach(p => p._score = computeScoreDefault(p, localUser)); }
   } else {
     arr.forEach(p => p._score = computeScoreDefault(p, localUser));
   }
 
+  // sort
   arr.sort((a,b) => {
     if((b._score||0) !== (a._score||0)) return (b._score||0) - (a._score||0);
     return (b.time||0) - (a.time||0);
@@ -799,25 +793,17 @@ async function renderFeed(){
   });
 }
 
-// periodic re-render
+// periodic small re-render
 setInterval(()=> renderFeed(), 2500);
 
-// -------------------- Inbox & identity init ----------
-function identityLoadedActions(){
-  watchInbox();
-  renderFeed();
-}
-
+// -------------------- Startup & seed --------------------
 (async function tryLoadPubMetaOnStart(){
-  // try to show pub-only meta if present
   try{
     const pubRaw = localStorage.getItem(STORAGE_KEY_PUBONLY);
     if(pubRaw){ const meta = JSON.parse(pubRaw); renderProfile(meta); localUser = { username: meta.username, pair: null, lang: meta.lang }; showToast('Öffentliches Profil geladen', 'info'); }
-    // try load encrypted identity only if user supplies passphrase (not automatically)
   } catch(e){ console.warn(e); }
 })();
 
-// -------------------- Seed --------------------
 (function seed(){
   if(!localStorage.getItem(STORAGE_KEY_SEED)){
     const id = 'seed' + Date.now();
@@ -829,3 +815,4 @@ function identityLoadedActions(){
 </script>
 </body>
 </html>
+
